@@ -12,7 +12,7 @@ const (
     ReleaseDate = "2026-04-26"
 
     // ReleaseHash, the Git hash when version.go was generated
-    ReleaseHash = ""
+    ReleaseHash = "295e9dc"
     LicenseText = `
 cmarkfind is a Go module for implementing static site search using CommonMark documents
 Copyright (C) 2026 R. S. Doiel

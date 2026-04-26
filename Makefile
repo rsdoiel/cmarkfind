@@ -8,7 +8,7 @@ PROJECT = cmarkfind
 
 GIT_GROUP = Laboratory
 
-PROGRAMS = <PROGRAM_LISTS_GOES_HERE>
+PROGRAMS = cmarkfind
 
 RELEASE_DATE = $(shell date +%Y-%m-%d)
 
