@@ -5,10 +5,10 @@
 
 To match the workspace standard (knowledge and opml are the models; Go 1.27.3 across repositories). Do one repository at a time; run the tests and `make -n release` after each step.
 
-- [ ] Makefile: add `generate` (cmt for version.go, CITATION.cff, about.md, installers); make `build` stop running cmt. Model: opml/Makefile.
-- [ ] Makefile: add `check-release` and make `release` run `generate` then `check-release`.
-- [ ] Makefile: add `check-go-version` (go.mod, codemeta.json and the Go in use agree); `check-release` calls it.
-- [ ] Drop the armv7l target and 32-bit Pi wording (dropped 2026-10-27).
-- [ ] Add publish.bash and publish.ps1 (copy knowledge's).
-- [ ] Add release.bash and release.ps1 (fountain's / knowledge's).
-- [ ] website.mak, page.tmpl, add-col-scope.lua, website.ps1: take knowledge's (check `NO_PUBLISH` and nav links).
+- [x] Makefile: add `generate`. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
+- [x] Makefile: add `check-release` and make `release` run `generate` then `check-release`. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
+- [x] Makefile: add `check-go-version`. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
+- [x] Drop the armv7l target and 32-bit Pi wording. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
+- [x] Add publish.bash and publish.ps1. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
+- [x] Add release.bash and release.ps1. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
+- [x] website.mak, page.tmpl, add-col-scope.lua, website.ps1: take knowledge's. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
