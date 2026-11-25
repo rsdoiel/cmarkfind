@@ -8,23 +8,23 @@
       "type": "Person",
       "givenName": "R. S.",
       "familyName": "Doiel",
-      "email": "rsdoiel@gmail.com"
+      "email": "rsdoiel@thundermail.com"
     }
   ],
   "dateCreated": "2026-04-25",
-  "dateModified": "2026-04-26",
-  "description": "CMarkFind is a Go module inspired by PageFind. Instead of working with HTML, \nCMarkFind works withe CommonMark documents and their front matter.\nIt can create the indexes suitable for a static website search and\nalso allows those indexes to be reused on the command line.",
+  "dateModified": "2026-11-25",
+  "description": "CMarkFind is a Go module inspired by PageFind. It seeks to provide a personal search engine for the Markdown Web and be embedded in Markdown Web browsers like cmarkbrowser of potentially BonBon.",
   "keywords": [
-    "static site search",
+    "personal search engine",
     "Markdown",
     "CommonMark",
-    "front matter"
+    "front matter",
+    "Markdown Web"
   ],
   "name": "cmarkfind",
   "license": "https://www.gnu.org/licenses/agpl-3.0.txt",
   "programmingLanguage": [
-    "Go",
-    "TypeScript"
+    "Go"
   ],
   "version": "0.0.0",
   "developmentStatus": "concept",
