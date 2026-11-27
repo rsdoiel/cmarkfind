@@ -190,6 +190,7 @@ func (o *out) searchIndex(dir string, query string, limit int) error {
 	type row struct {
 		address, title string
 		score          float64
+		ex             index.Excerpt
 	}
 	rows := make([]row, 0, len(hits))
 	for _, h := range hits {
@@ -197,18 +198,36 @@ func (o *out) searchIndex(dir string, query string, limit int) error {
 		if err != nil {
 			return err
 		}
-		rows = append(rows, row{h.Address, f.Title, h.Score})
+		ex, err := ix.Excerpt(node, h.Doc, 0)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, row{h.Address, f.Title, h.Score, ex})
 	}
 	if o.json {
 		hs := make([]map[string]any, 0, len(rows))
 		for _, r := range rows {
-			hs = append(hs, map[string]any{"address": r.address, "title": r.title, "score": r.score})
+			h := map[string]any{"address": r.address, "title": r.title, "score": r.score, "excerpt": r.ex.HTML}
+			if r.ex.Anchor != "" {
+				h["anchor"] = r.ex.Anchor
+			}
+			hs = append(hs, h)
 		}
 		b, _ := json.Marshal(map[string]any{"hits": hs, "searched": ix.Count()})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 	} else {
 		for _, r := range rows {
 			fmt.Fprintf(o.stdout, "%s\n  %s\n", r.title, r.address)
+			if r.ex.Text != "" {
+				lead, trail := "", ""
+				if r.ex.Leading {
+					lead = "… "
+				}
+				if r.ex.Trailing {
+					trail = " …"
+				}
+				fmt.Fprintf(o.stdout, "  %s%s%s\n", lead, r.ex.Text, trail)
+			}
 		}
 		fmt.Fprintf(o.stderr, "%s: %d %s, searched %d pages\n", appName, len(rows), plural(len(rows), "hit", "hits"), ix.Count())
 	}

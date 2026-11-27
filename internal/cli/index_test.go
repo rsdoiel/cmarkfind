@@ -302,3 +302,37 @@ func TestExitStatusDocumentsIndexCodes(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexSearchShowsAnExcerpt(t *testing.T) {
+	db, dir := built(t)
+	r := do(t, "-db", db, "search", "-index", dir, "otter")
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(r.out, "The otter swims in the river") {
+		t.Errorf("no excerpt in %q", r.out)
+	}
+	if strings.Contains(r.out, "<mark>") {
+		t.Errorf("a terminal does not get HTML: %q", r.out)
+	}
+}
+
+func TestIndexSearchJSONHasTheMarkedExcerpt(t *testing.T) {
+	db, dir := built(t)
+	r := do(t, "-db", db, "search", "-index", dir, "-json", "shallow")
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	var v struct {
+		Hits []struct {
+			Address string
+			Excerpt string
+		}
+	}
+	if err := json.Unmarshal([]byte(r.out), &v); err != nil || len(v.Hits) != 1 {
+		t.Fatalf("json %q: %v", r.out, err)
+	}
+	if !strings.Contains(v.Hits[0].Excerpt, "<mark>shallow</mark> water") {
+		t.Errorf("excerpt = %q", v.Hits[0].Excerpt)
+	}
+}

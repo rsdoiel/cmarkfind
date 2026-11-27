@@ -91,6 +91,22 @@ var md = goldmark.New(goldmark.WithExtensions(extension.GFM))
  *   t := index.MarkdownText("# Hi\n\nSee [docs](https://x.org).") // "Hi See docs"
  */
 func MarkdownText(src string) string {
+	text, _ := markdownText(src)
+	return text
+}
+
+// headingAt is a heading found by markdownText: its text, level and the byte
+// offset in the text where it starts.
+type headingAt struct {
+	text   string
+	level  int
+	offset int
+}
+
+// markdownText is MarkdownText that also reports where the headings are.
+func markdownText(src string) (string, []headingAt) {
+	var heads []headingAt
+	var open []int
 	b := []byte(src)
 	root := md.Parser().Parse(text.NewReader(b))
 	var sb strings.Builder
@@ -104,6 +120,17 @@ func MarkdownText(src string) string {
 	}
 	ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		switch v := n.(type) {
+		case *ast.Heading:
+			if entering {
+				space()
+				heads = append(heads, headingAt{level: v.Level, offset: sb.Len()})
+				open = append(open, len(heads)-1)
+			} else {
+				h := &heads[open[len(open)-1]]
+				open = open[:len(open)-1]
+				h.text = strings.TrimSpace(sb.String()[h.offset:])
+				space()
+			}
 		case *ast.RawHTML, *ast.HTMLBlock:
 			if entering {
 				space()
@@ -145,7 +172,8 @@ func MarkdownText(src string) string {
 		}
 		return ast.WalkContinue, nil
 	})
-	return strings.TrimSpace(sb.String())
+	text := strings.TrimSpace(sb.String())
+	return text, heads
 }
 
 /** FragmentText is the text a fragment stores: one surface word per word of the

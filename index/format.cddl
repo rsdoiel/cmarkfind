@@ -1,4 +1,4 @@
-; cmarkfind index format, version 1 (DRAFT: not implemented; not frozen)
+; cmarkfind index format, version 1 (implemented by cmarkfind; not frozen until it is released)
 ;
 ; CDDL (RFC 8610) for the files of one index: a manifest and the files it
 ; names. The manifest is JSON (RFC 8259) so a person can read it; every other
@@ -35,7 +35,7 @@
 ; LIMITS. Readers cap: manifest 4 MiB, one decompressed file "max-file-size",
 ; array and map sizes in a file at its entry count, nesting depth 8, and the
 ; number of files a manifest names ("max-files"). The numbers below are the
-; defaults of this draft.
+; defaults of version 1.
 
 max-file-size = 8388608      ; 8 MiB decompressed
 max-files = 1000000
@@ -124,8 +124,12 @@ fragment = {
 
 field-value = tstr / [* tstr]
 
-; A heading: its slug (markdownweb's rule, so a link to it resolves), its heading text,
-; the position of its first word, its level (1 to 6).
+; A heading: its slug, its heading text (Markdown syntax removed), the position
+; of its first word in "text", its level (1 to 6). The slug rule is the one
+; GitHub uses, so a link to a heading resolves on sites that follow it: lower
+; case; letters, marks, digits, "-" and "_" kept; each space becomes "-"; other
+; characters dropped; a repeat of a slug on the page gets "-1", "-2", ...
+; Headings with no word or an empty slug are left out.
 anchor = [slug: tstr, heading: tstr, position: uint, level: 1..6]
 segment = [weight: uint, words: uint]
 

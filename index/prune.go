@@ -3,6 +3,7 @@ package index
 import (
 	"encoding/hex"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -58,11 +59,11 @@ func Prune(dir string) (int, error) {
 			continue
 		}
 		for _, e := range ents {
-			name := filepath.Join(kind, e.Name())
+			name := path.Join(kind, e.Name())
 			if e.IsDir() || live[name] || !(strings.HasSuffix(name, ".cbor") || strings.HasSuffix(name, ".cbor.gz")) {
 				continue
 			}
-			if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			if err := os.Remove(filepath.Join(dir, filepath.FromSlash(name))); err != nil {
 				return removed, err
 			}
 			removed++

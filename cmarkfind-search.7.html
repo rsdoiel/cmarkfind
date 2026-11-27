@@ -42,7 +42,10 @@ holds no index, 65 when it is damaged, 2 when the query is too large.
 </dd>
 <dt>-json</dt>
 <dd>
-Write {“hits”: […], “searched”: N}.
+Write {“hits”: […], “searched”: N}. With -index each hit also has
+“excerpt” (the best 30 words, HTML-escaped, each matched word in <mark>)
+and, when the excerpt sits under a heading, “anchor” (the heading’s
+slug, for address#anchor).
 </dd>
 </dl>
 <p>Use – before a query that starts with a dash.</p>

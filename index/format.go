@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 
@@ -209,6 +211,7 @@ type fragmentRec struct {
 	Text      string            `cbor:"1,keyasint"`
 	WordCount uint64            `cbor:"2,keyasint"`
 	Fields    map[string]any    `cbor:"3,keyasint,omitempty"`
+	Anchors   []anchorRec       `cbor:"4,keyasint,omitempty"`
 	Segments  [][2]uint64       `cbor:"5,keyasint,omitempty"`
 	_         map[string]string `cbor:"-"`
 }
@@ -236,7 +239,7 @@ func compressedName(kind string, digest string, compression string) string {
 	if compression == "gzip" {
 		ext = ".cbor.gz"
 	}
-	return filepath.Join(kind, digest+ext)
+	return path.Join(kind, digest+ext) // slash separated, as in a Source
 }
 
 func sum(b []byte) string {
@@ -267,21 +270,21 @@ func writeFile(dir, kind, compression string, raw []byte) (fileRef, error) {
 		zw.Close()
 		data = buf.Bytes()
 	}
-	path := filepath.Join(dir, compressedName(kind, ref.Digest, compression))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	file := filepath.Join(dir, filepath.FromSlash(compressedName(kind, ref.Digest, compression)))
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return ref, err
 	}
-	return ref, os.WriteFile(path, data, 0o644)
+	return ref, os.WriteFile(file, data, 0o644)
 }
 
 // readFile reads the file kind/digest, decompresses with a limit, and checks
 // size and digest.
-func readFile(dir, kind, compression string, ref fileRef) ([]byte, error) {
-	path := filepath.Join(dir, compressedName(kind, ref.Digest, compression))
-	f, err := os.Open(path)
+func readFile(src Source, kind, compression string, ref fileRef) ([]byte, error) {
+	name := compressedName(kind, ref.Digest, compression)
+	f, err := src.Open(name)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, dataf("the manifest names %s, which is missing", filepath.ToSlash(compressedName(kind, ref.Digest, compression)))
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, dataf("the manifest names %s, which is missing", name)
 		}
 		return nil, err
 	}
@@ -313,4 +316,13 @@ func readFile(dir, kind, compression string, ref fileRef) ([]byte, error) {
 
 func missingf(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrMissing, fmt.Sprintf(format, args...))
+}
+
+// anchorRec is a heading: [slug, heading, position, level].
+type anchorRec struct {
+	_        struct{} `cbor:",toarray"`
+	Slug     string
+	Heading  string
+	Position uint64
+	Level    uint64
 }

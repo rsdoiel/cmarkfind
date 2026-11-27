@@ -34,7 +34,9 @@ Text that is not valid query syntax is searched as plain words.
   2 when the query is too large.
 
 -json
-: Write {"hits": [...], "searched": N}.
+: Write {"hits": [...], "searched": N}. With -index each hit also has "excerpt"
+  (the best 30 words, HTML-escaped, each matched word in <mark>) and, when the
+  excerpt sits under a heading, "anchor" (the heading's slug, for address#anchor).
 
 Use -- before a query that starts with a dash.
 

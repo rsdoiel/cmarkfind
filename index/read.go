@@ -1,12 +1,14 @@
 package index
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
+	"io/fs"
 	"math"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -41,6 +43,7 @@ type Hit struct {
  *   Text (string)       — one surface word per word of the page
  *   WordCount (int)     — number of words of Text
  *   Segments ([][2]int) — [weight, words] pieces of Text (title, description, body)
+ *   Anchors ([]Anchor)  — the page's headings, in order
  *
  * Example:
  *   f, _ := ix.Fragment(0)
@@ -49,13 +52,30 @@ type Fragment struct {
 	Address, Title, Description, Text string
 	WordCount                         int
 	Segments                          [][2]int
+	Anchors                           []Anchor
+}
+
+/** Anchor is a heading of a page.
+ *
+ * Fields:
+ *   Slug (string)    — fragment identifier, unique on the page
+ *   Heading (string) — the heading text
+ *   Position (int)   — index of its first word in the fragment text
+ *   Level (int)      — 1 to 6
+ *
+ * Example:
+ *   link := f.Address + "#" + f.Anchors[0].Slug
+ */
+type Anchor struct {
+	Slug, Heading   string
+	Position, Level int
 }
 
 /** Index is an opened index directory. Files are read when a query needs them,
  * each checked against its digest. It is safe for concurrent use.
  */
 type Index struct {
-	dir string
+	src Source
 	m   manifest
 
 	mu     sync.Mutex
@@ -78,10 +98,44 @@ type Index struct {
  *   ix, err := index.Open("idx")
  */
 func Open(dir string) (*Index, error) {
-	f, err := os.Open(filepath.Join(dir, "manifest.json"))
+	ix, err := openSource(os.DirFS(dir), dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, wrapMissing(dir)
+		return nil, err
+	}
+	return ix, nil
+}
+
+/** Source is where an index's files are read from: a file system whose root is
+ * the index (the directory holding manifest.json). Names are slash-separated
+ * and relative ("manifest.json", "w/<digest>.cbor.gz"); a missing file reports
+ * an error satisfying errors.Is(err, fs.ErrNotExist). os.DirFS is the local
+ * source; an HTTP source (a site's published index) implements the same
+ * interface.
+ *
+ * Example:
+ *   var src index.Source = os.DirFS("idx")
+ */
+type Source = fs.FS
+
+/** OpenSource is Open for any Source: it reads and checks manifest.json.
+ *
+ * Parameters:
+ *   src (Source) — the index files
+ *
+ * Returns:
+ *   *Index — the opened index
+ *   error  — ErrMissing when there is no manifest; ErrData when it is wrong
+ *
+ * Example:
+ *   ix, err := index.OpenSource(os.DirFS("idx"))
+ */
+func OpenSource(src Source) (*Index, error) { return openSource(src, "the source") }
+
+func openSource(src Source, where string) (*Index, error) {
+	f, err := src.Open("manifest.json")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, wrapMissing(where)
 		}
 		return nil, err
 	}
@@ -92,6 +146,9 @@ func Open(dir string) (*Index, error) {
 	}
 	if len(raw) > maxManifestSize {
 		return nil, dataf("manifest is over %d bytes", maxManifestSize)
+	}
+	if err := checkDuplicateKeys(raw); err != nil {
+		return nil, err
 	}
 	var m manifest
 	if err := json.Unmarshal(raw, &m); err != nil {
@@ -130,7 +187,7 @@ func Open(dir string) (*Index, error) {
 	if next != m.Documents.Count {
 		return nil, dataf("document ranges cover %d documents, the manifest says %d", next, m.Documents.Count)
 	}
-	return &Index{dir: dir, m: m, chunks: map[int][]entry{}, frags: map[int]*fragmentRec{}}, nil
+	return &Index{src: src, m: m, chunks: map[int][]entry{}, frags: map[int]*fragmentRec{}}, nil
 }
 
 func wrapMissing(dir string) error {
@@ -173,7 +230,7 @@ func (ix *Index) chunk(i int) ([]entry, error) {
 	if e, ok := ix.chunks[i]; ok {
 		return e, nil
 	}
-	raw, err := readFile(ix.dir, "w", ix.m.Compression, ix.m.Chunks[i].File)
+	raw, err := readFile(ix.src, "w", ix.m.Compression, ix.m.Chunks[i].File)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +253,7 @@ func (ix *Index) docRows() ([]documentRow, error) {
 	}
 	rows := make([]documentRow, 0, ix.m.Documents.Count)
 	for _, r := range ix.m.Documents.Ranges {
-		raw, err := readFile(ix.dir, "d", ix.m.Compression, r.File)
+		raw, err := readFile(ix.src, "d", ix.m.Compression, r.File)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +290,7 @@ func (ix *Index) fragment(doc int) (*fragmentRec, error) {
 	if len(rows[doc].Fragment) != 32 {
 		return nil, dataf("document %d has a bad fragment digest", doc)
 	}
-	raw, err := readFile(ix.dir, "f", ix.m.Compression, fileRef{Digest: hex.EncodeToString(rows[doc].Fragment)})
+	raw, err := readFile(ix.src, "f", ix.m.Compression, fileRef{Digest: hex.EncodeToString(rows[doc].Fragment)})
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +327,9 @@ func (ix *Index) Fragment(doc int) (Fragment, error) {
 	for _, s := range fr.Segments {
 		out.Segments = append(out.Segments, [2]int{int(s[0]), int(s[1])})
 	}
+	for _, a := range fr.Anchors {
+		out.Anchors = append(out.Anchors, Anchor{Slug: a.Slug, Heading: a.Heading, Position: int(a.Position), Level: int(a.Level)})
+	}
 	return out, nil
 }
 
@@ -279,11 +339,11 @@ type use struct {
 	weight int
 }
 
-// lookup returns, for each document, the uses of every word matched by the
-// term (an exact word or, with Prefix, every word with that prefix).
-func (ix *Index) lookup(t Term) (map[int][]use, error) {
+// scan calls fn with every posting of the words matched by the term (an exact
+// word or, with Prefix, every word with that prefix): the document number and
+// the location list.
+func (ix *Index) scan(t Term, fn func(doc int, locs []int64)) error {
 	from := sort.Search(len(ix.m.Chunks), func(i int) bool { return ix.m.Chunks[i].To >= t.Text })
-	out := map[int][]use{}
 	for i := from; i < len(ix.m.Chunks); i++ {
 		c := ix.m.Chunks[i]
 		if !t.Prefix && c.From > t.Text {
@@ -294,7 +354,7 @@ func (ix *Index) lookup(t Term) (map[int][]use, error) {
 		}
 		entries, err := ix.chunk(i)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, e := range entries {
 			if t.Prefix && !strings.HasPrefix(e.Word, t.Text) || !t.Prefix && e.Word != t.Text {
@@ -303,11 +363,30 @@ func (ix *Index) lookup(t Term) (map[int][]use, error) {
 			doc := 0
 			for _, p := range e.Postings {
 				doc += int(p.Delta)
-				out[doc] = append(out[doc], decodeLocations(p.Locations)...)
+				fn(doc, p.Locations)
 			}
 		}
 	}
-	return out, nil
+	return nil
+}
+
+// lookup returns, for each document, the uses of every word matched by the
+// term.
+func (ix *Index) lookup(t Term) (map[int][]use, error) {
+	out := map[int][]use{}
+	err := ix.scan(t, func(doc int, locs []int64) { out[doc] = append(out[doc], decodeLocations(locs)...) })
+	return out, err
+}
+
+// lookupDoc is lookup for one document.
+func (ix *Index) lookupDoc(t Term, want int) (map[int][]use, error) {
+	out := map[int][]use{}
+	err := ix.scan(t, func(doc int, locs []int64) {
+		if doc == want {
+			out[doc] = append(out[doc], decodeLocations(locs)...)
+		}
+	})
+	return out, err
 }
 
 func decodeLocations(locs []int64) []use {
@@ -536,7 +615,12 @@ func bm25(uses []use, df int, n, length, avg float64) float64 {
 // phraseAt reports whether the words occur at consecutive positions of
 // document d inside one field: equal weights on consecutive positions mean the
 // same segment, because each segment has its own weight.
-func phraseAt(sets []map[int][]use, d int) bool {
+func phraseAt(sets []map[int][]use, d int) bool { return len(phraseStarts(sets, d)) > 0 }
+
+// phraseStarts returns the uses of the first word at which the whole phrase
+// follows in document d.
+func phraseStarts(sets []map[int][]use, d int) []use {
+	var out []use
 	for _, u := range sets[0][d] {
 		ok := true
 		for k := 1; k < len(sets) && ok; k++ {
@@ -550,10 +634,10 @@ func phraseAt(sets []map[int][]use, d int) bool {
 			ok = found
 		}
 		if ok {
-			return true
+			out = append(out, u)
 		}
 	}
-	return false
+	return out
 }
 
 /** Verify checks an index directory end to end: the manifest, then every file
@@ -574,6 +658,29 @@ func Verify(dir string) error {
 	if err != nil {
 		return err
 	}
+	return verifyIndex(ix)
+}
+
+/** VerifySource is Verify for any Source.
+ *
+ * Parameters:
+ *   src (Source) — the index files
+ *
+ * Returns:
+ *   error — nil when sound; ErrMissing without a manifest; ErrData otherwise
+ *
+ * Example:
+ *   err := index.VerifySource(os.DirFS("idx"))
+ */
+func VerifySource(src Source) error {
+	ix, err := OpenSource(src)
+	if err != nil {
+		return err
+	}
+	return verifyIndex(ix)
+}
+
+func verifyIndex(ix *Index) error {
 	for i := range ix.m.Chunks {
 		if _, err := ix.chunk(i); err != nil {
 			return err
@@ -601,4 +708,52 @@ func Verify(dir string) error {
 type Term struct {
 	Text   string
 	Prefix bool
+}
+
+// checkDuplicateKeys refuses JSON in which an object names a key twice:
+// encoding/json keeps the last one silently, so two readers could disagree
+// about which value counts.
+func checkDuplicateKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	var keys []map[string]bool // one set per open object; nil for an array
+	var isKey []bool           // whether the next string in the container is a key
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return dataf("manifest.json: %v", err)
+		}
+		switch v := tok.(type) {
+		case json.Delim:
+			switch v {
+			case '{':
+				keys = append(keys, map[string]bool{})
+				isKey = append(isKey, true)
+			case '[':
+				keys = append(keys, nil)
+				isKey = append(isKey, false)
+			default:
+				keys, isKey = keys[:len(keys)-1], isKey[:len(isKey)-1]
+				if n := len(keys); n > 0 && keys[n-1] != nil {
+					isKey[n-1] = true // a value ended; the next token is a key
+				}
+			}
+			continue
+		case string:
+			if n := len(keys); n > 0 && keys[n-1] != nil && isKey[n-1] {
+				if keys[n-1][v] {
+					return dataf("manifest.json has a duplicate key %q", v)
+				}
+				keys[n-1][v] = true
+				isKey[n-1] = false
+				continue
+			}
+		}
+		// a scalar value
+		if n := len(keys); n > 0 && keys[n-1] != nil {
+			isKey[n-1] = true
+		}
+	}
 }
