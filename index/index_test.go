@@ -37,6 +37,15 @@ func open(t *testing.T, dir string) *Index {
 	return ix
 }
 
+// search parses q and runs it: the path a command takes.
+func search(ix *Index, q string, limit int) ([]Hit, error) {
+	n, err := ParseQuery(q, nil)
+	if err != nil {
+		return nil, err
+	}
+	return ix.Search(n, limit)
+}
+
 func addrs(hits []Hit) []string {
 	var out []string
 	for _, h := range hits {
@@ -50,7 +59,7 @@ func TestRoundTripTermSearch(t *testing.T) {
 	if ix.Count() != 3 {
 		t.Fatalf("count = %d", ix.Count())
 	}
-	hits, err := ix.Search(Query{Terms: []Term{{Text: "tomatoes"}}}, 10)
+	hits, err := search(ix, "tomatoes", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,11 +78,11 @@ func TestRoundTripTermSearch(t *testing.T) {
 
 func TestImplicitAndAndNoMatch(t *testing.T) {
 	ix := open(t, build(t, fixture(), 0))
-	hits, _ := ix.Search(Query{Terms: []Term{{Text: "tomatoes"}, {Text: "seeds"}}}, 10)
+	hits, _ := search(ix, "tomatoes seeds", 10)
 	if !reflect.DeepEqual(addrs(hits), []string{"https://example.org/b.md"}) {
 		t.Fatalf("AND = %v", addrs(hits))
 	}
-	hits, err := ix.Search(Query{Terms: []Term{{Text: "zebra"}}}, 10)
+	hits, err := search(ix, "zebra", 10)
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("no match = %v, %v", hits, err)
 	}
@@ -85,7 +94,7 @@ func TestTitleOutweighsBody(t *testing.T) {
 		{Address: "https://x/title.md", Title: "Alpha", Body: "beta gamma delta"},
 	}
 	ix := open(t, build(t, docs, 0))
-	hits, _ := ix.Search(Query{Terms: []Term{{Text: "alpha"}}}, 10)
+	hits, _ := search(ix, "alpha", 10)
 	if len(hits) != 2 || hits[0].Address != "https://x/title.md" {
 		t.Fatalf("order = %v", addrs(hits))
 	}
@@ -97,11 +106,11 @@ func TestPrefixAcrossChunks(t *testing.T) {
 	if ix.Chunks() < 3 {
 		t.Fatalf("expected several chunks, got %d", ix.Chunks())
 	}
-	hits, err := ix.Search(Query{Terms: []Term{{Text: "tomato", Prefix: true}}}, 10)
+	hits, err := search(ix, "tomato*", 10)
 	if err != nil || len(hits) != 2 {
 		t.Fatalf("prefix hits = %v, %v", addrs(hits), err)
 	}
-	hits, _ = ix.Search(Query{Terms: []Term{{Text: "gard", Prefix: true}}}, 10)
+	hits, _ = search(ix, "gard*", 10)
 	if len(hits) != 2 { // "Gardening" in b, "garden" in a
 		t.Fatalf("gard* = %v", addrs(hits))
 	}
@@ -109,16 +118,16 @@ func TestPrefixAcrossChunks(t *testing.T) {
 
 func TestPhrase(t *testing.T) {
 	ix := open(t, build(t, fixture(), 0))
-	hits, _ := ix.Search(Query{Phrases: [][]string{{"quick", "brown", "fox"}}}, 10)
+	hits, _ := search(ix, `"quick brown fox"`, 10)
 	if !reflect.DeepEqual(addrs(hits), []string{"https://example.org/c.md"}) {
 		t.Fatalf("phrase = %v", addrs(hits))
 	}
-	hits, _ = ix.Search(Query{Phrases: [][]string{{"brown", "quick"}}}, 10)
+	hits, _ = search(ix, `"brown quick"`, 10)
 	if len(hits) != 0 {
 		t.Fatalf("reversed phrase matched %v", addrs(hits))
 	}
 	// words of title and body must not join into a phrase across the boundary
-	hits, _ = ix.Search(Query{Phrases: [][]string{{"untitled", "nothing"}}}, 10)
+	hits, _ = search(ix, `"untitled nothing"`, 10)
 	if len(hits) != 0 {
 		t.Fatalf("phrase crossed fields: %v", addrs(hits))
 	}
@@ -126,7 +135,7 @@ func TestPhrase(t *testing.T) {
 
 func TestFragmentWordCountInvariant(t *testing.T) {
 	ix := open(t, build(t, fixture(), 0))
-	hits, _ := ix.Search(Query{Terms: []Term{{Text: "soil"}}}, 10)
+	hits, _ := search(ix, "soil", 10)
 	if len(hits) == 0 {
 		t.Fatal("no hits")
 	}
@@ -196,7 +205,7 @@ func TestVerifyCatchesCorruption(t *testing.T) {
 	// Open reads lazily; a search over the damaged chunk must fail, not return wrong hits
 	ix := open(t, dir)
 	for _, w := range []string{"tomatoes", "index", "soil", "quick", "gardening"} {
-		if _, err := ix.Search(Query{Terms: []Term{{Text: w}}}, 10); err != nil {
+		if _, err := search(ix, w, 10); err != nil {
 			return
 		}
 	}

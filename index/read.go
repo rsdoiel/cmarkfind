@@ -18,35 +18,6 @@ const (
 	bm25B  = 0.75
 )
 
-/** Term is one word of a query.
- *
- * Fields:
- *   Text (string)  — the word, lower case
- *   Prefix (bool)  — true matches every word that starts with Text
- *
- * Example:
- *   index.Term{Text: "tomato", Prefix: true}
- */
-type Term struct {
-	Text   string
-	Prefix bool
-}
-
-/** Query is a version-1 query: words that must all match (implicit AND) and
- * phrases that must all occur. Words are lower-cased by the caller (use Words).
- *
- * Fields:
- *   Terms ([]Term)       — each must match
- *   Phrases ([][]string) — each must occur as consecutive words of one field
- *
- * Example:
- *   q := index.Query{Terms: []index.Term{{Text: "soil"}}}
- */
-type Query struct {
-	Terms   []Term
-	Phrases [][]string
-}
-
 /** Hit is one result.
  *
  * Fields:
@@ -353,12 +324,14 @@ func decodeLocations(locs []int64) []use {
 	return out
 }
 
-/** Search runs q and returns up to limit hits, best first (ties by document
- * number). Every term and phrase must match; the score is the BM25 sum over
- * the matched words with field weights 4, 2 and 1.
+/** Search runs a parsed query and returns up to limit hits, best first (ties
+ * by document number). The score is the BM25 sum over the positive clauses a
+ * page matched, with the writer's field weights; a NOT clause only filters. A
+ * phrase matches consecutive words inside one field; a field clause counts
+ * only that field's positions.
  *
  * Parameters:
- *   q (Query)    — words and phrases
+ *   n (*Node)    — a tree from ParseQuery; nil matches nothing
  *   limit (int)  — most hits to return; 0 or less means no limit
  *
  * Returns:
@@ -366,102 +339,26 @@ func decodeLocations(locs []int64) []use {
  *   error — ErrData when a file does not match its digest or is malformed
  *
  * Example:
- *   hits, err := ix.Search(index.Query{Terms: []index.Term{{Text: "soil"}}}, 10)
+ *   n, _ := index.ParseQuery("soil -clay", nil)
+ *   hits, err := ix.Search(n, 10)
  */
-func (ix *Index) Search(q Query, limit int) ([]Hit, error) {
-	if len(q.Terms) == 0 && len(q.Phrases) == 0 {
+func (ix *Index) Search(n *Node, limit int) ([]Hit, error) {
+	if n == nil {
 		return nil, nil
 	}
 	rows, err := ix.docRows()
 	if err != nil {
 		return nil, err
 	}
-	n := float64(len(rows))
-	avg := float64(ix.m.Documents.Words) / math.Max(n, 1)
+	total := float64(len(rows))
+	avg := float64(ix.m.Documents.Words) / math.Max(total, 1)
 	if avg == 0 {
 		avg = 1
 	}
-
-	var sets []map[int][]use
-	for _, t := range q.Terms {
-		u, err := ix.lookup(t)
-		if err != nil {
-			return nil, err
-		}
-		sets = append(sets, u)
-	}
-	phraseWords := make([][]map[int][]use, len(q.Phrases))
-	for i, ph := range q.Phrases {
-		if len(ph) == 0 {
-			continue
-		}
-		for _, w := range ph {
-			u, err := ix.lookup(Term{Text: w})
-			if err != nil {
-				return nil, err
-			}
-			phraseWords[i] = append(phraseWords[i], u)
-		}
-	}
-
-	// candidates: documents present in every set
-	cands := map[int]bool{}
-	first := true
-	narrow := func(has func(int) bool, universe map[int][]use) {
-		if first {
-			for d := range universe {
-				cands[d] = true
-			}
-			first = false
-			return
-		}
-		for d := range cands {
-			if !has(d) {
-				delete(cands, d)
-			}
-		}
-	}
-	for _, s := range sets {
-		s := s
-		narrow(func(d int) bool { _, ok := s[d]; return ok }, s)
-	}
-	for _, ws := range phraseWords {
-		if len(ws) == 0 {
-			continue
-		}
-		for _, w := range ws {
-			w := w
-			narrow(func(d int) bool { _, ok := w[d]; return ok }, w)
-		}
-	}
-
-	scores := map[int]float64{}
-	for d := range cands {
-		var s float64
-		for _, set := range sets {
-			s += bm25(set[d], len(set), n, float64(rows[d].WordCount), avg)
-		}
-		for i, ws := range phraseWords {
-			if len(ws) == 0 {
-				continue
-			}
-			ok, err := ix.phraseAt(d, ws)
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				delete(cands, d)
-				s = 0
-				break
-			}
-			_ = i
-			for _, w := range ws {
-				s += bm25(w[d], len(w), n, float64(rows[d].WordCount), avg)
-			}
-		}
-		if cands[d] {
-			scores[d] = s
-		}
+	ev := &evaluator{ix: ix, rows: rows, n: total, avg: avg}
+	scores, err := ev.eval(n)
+	if err != nil {
+		return nil, err
 	}
 	hits := make([]Hit, 0, len(scores))
 	for d, s := range scores {
@@ -486,6 +383,144 @@ func (ix *Index) Search(q Query, limit int) ([]Hit, error) {
 	return hits, nil
 }
 
+// fieldWeight maps a field to the weight of its segment; weights are unique, so
+// a position's weight says which field it is in.
+var fieldWeight = map[string]int{"title": weightTitle, "description": weightDescription, "body": weightBody}
+
+type evaluator struct {
+	ix   *Index
+	rows []documentRow
+	n    float64
+	avg  float64
+}
+
+// eval returns the pages a node matches with their scores.
+func (ev *evaluator) eval(n *Node) (map[int]float64, error) {
+	switch n.Kind {
+	case KindTerm, KindPhrase:
+		return ev.leaf(n)
+	case KindOr:
+		out := map[int]float64{}
+		for _, k := range n.Kids {
+			s, err := ev.eval(k)
+			if err != nil {
+				return nil, err
+			}
+			for d, v := range s {
+				out[d] += v
+			}
+		}
+		return out, nil
+	case KindNot:
+		s, err := ev.eval(n.Kids[0])
+		if err != nil {
+			return nil, err
+		}
+		return ev.complement(s), nil
+	}
+	// and: intersect the positive clauses, then remove what the NOT clauses match
+	var out map[int]float64
+	var negs []*Node
+	for _, k := range n.Kids {
+		if k.Kind == KindNot {
+			negs = append(negs, k.Kids[0])
+			continue
+		}
+		s, err := ev.eval(k)
+		if err != nil {
+			return nil, err
+		}
+		if out == nil {
+			out = s
+			continue
+		}
+		next := map[int]float64{}
+		for d, v := range out {
+			if w, ok := s[d]; ok {
+				next[d] = v + w
+			}
+		}
+		out = next
+	}
+	if out == nil {
+		out = ev.complement(map[int]float64{})
+	}
+	for _, k := range negs {
+		s, err := ev.eval(k)
+		if err != nil {
+			return nil, err
+		}
+		for d := range s {
+			delete(out, d)
+		}
+	}
+	return out, nil
+}
+
+func (ev *evaluator) complement(s map[int]float64) map[int]float64 {
+	out := make(map[int]float64, len(ev.rows))
+	for d := range ev.rows {
+		if _, in := s[d]; !in {
+			out[d] = 0
+		}
+	}
+	return out
+}
+
+// filtered keeps the uses in the node's field (all of them when it has none).
+func filtered(uses map[int][]use, field string) map[int][]use {
+	w, ok := fieldWeight[field]
+	if field == "" {
+		return uses
+	}
+	out := map[int][]use{}
+	if !ok {
+		return out // a field this index has no segment for
+	}
+	for d, us := range uses {
+		for _, u := range us {
+			if u.weight == w {
+				out[d] = append(out[d], u)
+			}
+		}
+	}
+	return out
+}
+
+func (ev *evaluator) leaf(n *Node) (map[int]float64, error) {
+	sets := make([]map[int][]use, len(n.Words))
+	for i, w := range n.Words {
+		u, err := ev.ix.lookup(Term{Text: w, Prefix: n.Prefix && i == len(n.Words)-1})
+		if err != nil {
+			return nil, err
+		}
+		sets[i] = filtered(u, n.Field)
+	}
+	docs := map[int]bool{}
+	for d := range sets[0] {
+		docs[d] = true
+	}
+	for _, s := range sets[1:] {
+		for d := range docs {
+			if _, ok := s[d]; !ok {
+				delete(docs, d)
+			}
+		}
+	}
+	out := map[int]float64{}
+	for d := range docs {
+		if len(sets) > 1 && !phraseAt(sets, d) {
+			continue
+		}
+		var score float64
+		for _, s := range sets {
+			score += bm25(s[d], len(s), ev.n, float64(ev.rows[d].WordCount), ev.avg)
+		}
+		out[d] = score
+	}
+	return out, nil
+}
+
 func bm25(uses []use, df int, n, length, avg float64) float64 {
 	var tf float64
 	for _, u := range uses {
@@ -498,40 +533,27 @@ func bm25(uses []use, df int, n, length, avg float64) float64 {
 	return idf * tf * (bm25K1 + 1) / (tf + bm25K1*(1-bm25B+bm25B*length/avg))
 }
 
-// phraseAt reports whether the words occur consecutively in document d, all
-// inside one segment (title, description or body).
-func (ix *Index) phraseAt(d int, ws []map[int][]use) (bool, error) {
-	fr, err := ix.fragment(d)
-	if err != nil {
-		return false, err
-	}
-	segOf := func(pos int) int {
-		start := 0
-		for i, s := range fr.Segments {
-			if pos < start+int(s[1]) {
-				return i
-			}
-			start += int(s[1])
-		}
-		return -1
-	}
-	for _, u := range ws[0][d] {
+// phraseAt reports whether the words occur at consecutive positions of
+// document d inside one field: equal weights on consecutive positions mean the
+// same segment, because each segment has its own weight.
+func phraseAt(sets []map[int][]use, d int) bool {
+	for _, u := range sets[0][d] {
 		ok := true
-		for k := 1; k < len(ws) && ok; k++ {
+		for k := 1; k < len(sets) && ok; k++ {
 			found := false
-			for _, v := range ws[k][d] {
-				if v.pos == u.pos+k {
+			for _, v := range sets[k][d] {
+				if v.pos == u.pos+k && v.weight == u.weight {
 					found = true
 					break
 				}
 			}
 			ok = found
 		}
-		if ok && segOf(u.pos) == segOf(u.pos+len(ws)-1) {
-			return true, nil
+		if ok {
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 /** Verify checks an index directory end to end: the manifest, then every file
@@ -571,4 +593,12 @@ func Verify(dir string) error {
 		}
 	}
 	return nil
+}
+
+/** Term is one word of a lookup: an exact word, or with Prefix every word that
+ * starts with Text.
+ */
+type Term struct {
+	Text   string
+	Prefix bool
 }
