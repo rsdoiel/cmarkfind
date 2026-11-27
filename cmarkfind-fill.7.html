@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-fill.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-fill — read a site’s pages into the corpus</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind fill <a href="#options">OPTIONS</a> SOURCE</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Read the pages a site’s table of contents (/.well-known/toc.opml)
+lists and store them. SOURCE is a folder (a site on disk, nothing is
+fetched) or an http:// or https:// address, either the site’s address or
+its toc.opml.</p>
+<p>Pages already stored are asked for again only if they changed: the
+web fill sends If-None-Match and takes a 304 as unchanged. A page the
+table of contents no longer lists is marked gone and is not searched. A
+page that is excluded (see cmarkfind-exclude(7)) is neither stored nor
+requested.</p>
+<p>The web fill is polite. It waits between requests to one host, names
+itself in the User-Agent, and obeys robots.txt.</p>
+<p>A big site can be read a few pages at a time. With -batch N a fill
+asks about at most N pages, never-asked pages first, then the ones
+checked longest ago, and says how many remain. Run it again to continue;
+with -every it does so by itself.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-pause DURATION</dt>
+<dd>
+Wait between requests to one host. Default 1s.
+</dd>
+<dt>-robots</dt>
+<dd>
+Obey robots.txt. Default true; -robots=false ignores it.
+</dd>
+<dt>-user-agent TEXT</dt>
+<dd>
+The User-Agent sent. Default cmarkfind/VERSION.
+</dd>
+<dt>-max-pages N</dt>
+<dd>
+List at most N pages from the table of contents.
+</dd>
+<dt>-depth N</dt>
+<dd>
+Follow included outlines N levels.
+</dd>
+<dt>-batch N</dt>
+<dd>
+Ask about at most N pages, then stop (web sites only).
+</dd>
+<dt>-every DURATION</dt>
+<dd>
+With -batch, run another batch every DURATION until interrupted.
+</dd>
+<dt>-until-done</dt>
+<dd>
+With -every, stop when no listed page is unasked.
+</dd>
+<dt>-json</dt>
+<dd>
+Write the report as JSON.
+</dd>
+</dl>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind fill ~/Sites/example.org
+cmarkfind fill https://rsdoiel.github.io
+cmarkfind fill -batch 25 -every 1h -until-done https://example.org</code></pre>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>See cmarkfind-exit-status(7). A fill in which some pages failed
+finishes, prints its counts, and exits with the class of the first
+failure.</p>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-exclude(7), cmarkfind-forget(7),
+cmarkfind-corpus(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-fill.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

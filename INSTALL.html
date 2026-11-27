@@ -19,24 +19,22 @@
 <section id="main-content">
 <h1 id="installation-for-development-of-cmarkfind">Installation for
 development of <strong>cmarkfind</strong></h1>
-<p><strong>cmarkfind</strong> CMarkFind is a Go module inspired by
-PageFind. Instead of working with HTML, CMarkFind works withe CommonMark
-documents and their front matter. It can create the indexes suitable for
-a static website search and also allows those indexes to be reused on
-the command line.</p>
+<p><strong>cmarkfind</strong> is a personal search engine for the
+Markdown web. It keeps the pages of the sites you read in one SQLite3
+file and searches them locally.</p>
 <h2 id="quick-install-with-curl-or-irm">Quick install with curl or
 irm</h2>
 <p>There is an experimental installer.sh script that can be run with the
 following command to install latest table release. This may work for
 macOS, Linux and if you’re using Windows with the Unix subsystem. This
 would be run from your shell (e.g. Terminal on macOS).</p>
-<pre class="shell"><code>curl https://Laboratory.github.io/cmarkfind/installer.sh | sh</code></pre>
+<pre class="shell"><code>curl https://rsdoiel.github.io/cmarkfind/installer.sh | sh</code></pre>
 <p>This will install the programs included in cmarkfind in your
 <code>$HOME/bin</code> directory.</p>
 <p>If you are running Windows 10 or 11 use the Powershell command
 below.</p>
 <div class="sourceCode" id="cb2"><pre
-class="sourceCode ps1"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">irm</span> https<span class="op">://</span>Laboratory<span class="op">.</span><span class="fu">github</span><span class="op">.</span><span class="fu">io</span><span class="op">/</span>cmarkfind<span class="op">/</span>installer<span class="op">.</span><span class="fu">ps1</span> <span class="op">|</span> <span class="fu">iex</span></span></code></pre></div>
+class="sourceCode ps1"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">irm</span> https<span class="op">://</span>rsdoiel<span class="op">.</span><span class="fu">github</span><span class="op">.</span><span class="fu">io</span><span class="op">/</span>cmarkfind<span class="op">/</span>installer<span class="op">.</span><span class="fu">ps1</span> <span class="op">|</span> <span class="fu">iex</span></span></code></pre></div>
 <h3 id="if-your-are-running-macos-or-windows">If your are running macOS
 or Windows</h3>
 <p>You may get security warnings if you are using macOS or Windows. See

@@ -18,14 +18,27 @@
 </nav>
 <section id="main-content">
 <h1 id="about-this-software">About this software</h1>
-<h2 id="cmarkfind-0.0.0">cmarkfind 0.0.0</h2>
+<h2 id="cmarkfind-0.0.1">cmarkfind 0.0.1</h2>
+<ul>
+<li>first release: a corpus of Markdown pages in one SQLite3 FTS5 file
+(pure Go, no cgo), searched locally with bm25 ranking</li>
+<li>fill reads a site’s toc.opml from a folder or over the web, politely
+(pause per host, robots.txt, conditional requests), in resumable batches
+(-batch, -every, -until-done)</li>
+<li>verbs: fill, search, stats, forget, exclude, unexclude, help (help
+index lists nine topics, each a section 7 man page); -json everywhere;
+exit codes per the workspace convention</li>
+<li>the next cmarkbrowser release searches and fills the same corpus (S,
+F, -find)</li>
+</ul>
 <h2 id="authors">Authors</h2>
 <ul>
 <li><a href="https://orcid.org/0000-0003-0900-6903">R. S. Doiel</a></li>
 </ul>
-<p>CMarkFind is a Go module inspired by PageFind. It seeks to provide a
-personal search engine for the Markdown Web and be embedded in Markdown
-Web browsers like cmarkbrowser of potentially BonBon.</p>
+<p>cmarkfind is a personal search engine for the Markdown web. It keeps
+pages read from a site’s table of contents (toc.opml), on disk or over
+the web, in one SQLite3 file and searches them locally with FTS5.
+cmarkbrowser searches the same file.</p>
 <ul>
 <li><a href="https://www.gnu.org/licenses/agpl-3.0.txt">License</a></li>
 <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a>
@@ -41,7 +54,7 @@ Tracker</a></li>
 <h2 id="software-requirements">Software Requirements</h2>
 <ul>
 <li>Go &gt;= 1.27.4</li>
-<li>github.com/rsdoiel/markdownweb &gt;= 0.0.4</li>
+<li>github.com/rsdoiel/markdownweb &gt;= 0.0.5</li>
 <li>github.com/glebarez/go-sqlite &gt;= 1.23.0</li>
 </ul>
 <h2 id="software-suggestions">Software Suggestions</h2>

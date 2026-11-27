@@ -8,6 +8,8 @@
 - [ ] cmarkfind should use the verb, subverb DSL style we've established wth knowledge build's TUI providing both the scriptable actions but also a TUI to use it directly in a terminal.
 - [ ] If I am exploring something using cmarkfind, I should be able to add it to a designated knowledge base.
 
+- [ ] After v0.0.1 (the SQLite3 + FTS5 proof of concept): try the revised approach in `agents/projects/cmarkfind/notes/revised-concept-static-partitioned-index.md`, a data-only static search index (a JSON manifest plus Brotli-compressed CBOR shards, partitioned by term hash, verified by SHA-256) that the client searches locally, so a site could publish an index for cmarkfind and cmarkbrowser to use without site-supplied code. Needs a DR first: how it relates to the corpus (a source that fills it, or a second backend), the analyzer, and who builds the shards.
+
 ## Modernization (2026-11-16)
 
 To match the workspace standard (knowledge and opml are the models; Go 1.27.3 across repositories). Do one repository at a time; run the tests and `make -n release` after each step.
@@ -24,4 +26,5 @@ To match the workspace standard (knowledge and opml are the models; Go 1.27.3 ac
 - [ ] CLI follow-ups (DR-0002 Open): `-site-url` for a local fill whose outline addresses are not the site's; `verbs` listing and shell completion; pin and tags (a ranking boost, schema version 3).
 - [x] Trickle: fill -batch/-every/-until-done built 2026-11-26 (cmarkfind DR-0004, proposed); schema version 3.
 - [x] Curation: forget, exclude, unexclude built 2026-11-26 (cmarkfind DR-0003, proposed).
+- [x] v0.0.1 release review 2026-11-26: go.mod on markdownweb v0.0.5, README/INSTALL/CHANGES.md brought current, codemeta.json 0.0.1. `help index` and nine per-topic section 7 pages added.
 - [ ] Untried: `release.bash`, `publish.bash`, and the `.ps1` scripts; run `release.bash --dry-run` once the tree is committed.

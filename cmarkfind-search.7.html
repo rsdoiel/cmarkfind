@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-search.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-search — search the corpus</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind search <a href="#options">OPTIONS</a> QUERY…</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Search the corpus and print each hit’s title, address and tier, and
+the matching text. The count and how many pages were searched go to
+standard error. QUERY is words, “phrases”, AND, OR, NOT and word*; see
+cmarkfind-query(7). Text that is not valid query syntax is searched as
+plain words.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-limit N</dt>
+<dd>
+At most N hits. Default 10.
+</dd>
+<dt>-json</dt>
+<dd>
+Write {“hits”: […], “searched”: N}.
+</dd>
+</dl>
+<p>Use – before a query that starts with a dash.</p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>1 when nothing matches, 66 when there is no corpus yet. See
+cmarkfind-exit-status(7).</p>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind search oberon compiler
+cmarkfind search -json &#39;&quot;shallow water&quot;&#39; | jq .</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-query(7), cmarkfind-corpus(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-search.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

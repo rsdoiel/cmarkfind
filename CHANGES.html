@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="CHANGES.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="change-log">Change log</h1>
+<h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
+<p>First release: a personal search engine for the Markdown web.</p>
+<ul>
+<li>The corpus (cmarkfind DR-0001): Markdown pages in one SQLite3 file,
+searched with FTS5 and ranked by bm25, ties broken by tier. Pure Go
+(<code>github.com/glebarez/go-sqlite</code>), no cgo. Schema version 3;
+older files are upgraded in place, a newer one is refused (exit
+65).</li>
+<li>Verbs (cmarkfind DR-0002): <code>fill</code>, <code>search</code>,
+<code>stats</code>, <code>forget</code>, <code>exclude</code>,
+<code>unexclude</code>, <code>help</code>. <code>help index</code> lists
+nine topics (a page for each verb, and <code>query</code>,
+<code>corpus</code> and <code>exit-status</code>); each is a section 7
+manual page, <code>cmarkfind-TOPIC.7.md</code>, written by
+<code>make build</code>. <code>-json</code> on every verb; exit codes
+follow the workspace convention and are documented under EXIT
+STATUS.</li>
+<li><code>fill</code> reads a site’s <code>/.well-known/toc.opml</code>
+from a folder or over the web. The web fill is polite: a pause per host,
+a named User-Agent, <code>robots.txt</code>, and conditional requests
+(<code>ETag</code>, <code>If-None-Match</code>) through markdownweb
+v0.0.5. A page the outline no longer lists is marked gone, not
+searched.</li>
+<li>Curation (cmarkfind DR-0003): <code>forget</code> a site or
+everything, <code>exclude</code> and <code>unexclude</code> an address
+prefix.</li>
+<li>Trickle (cmarkfind DR-0004): <code>fill -batch N</code> asks about
+at most N pages (never-asked first, then oldest checked) and says how
+many remain; <code>-every</code> and <code>-until-done</code> keep
+going.</li>
+<li>the next cmarkbrowser release searches and fills the same file
+(<code>S</code>, <code>F</code>, <code>-find</code>).</li>
+</ul>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="CHANGES.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

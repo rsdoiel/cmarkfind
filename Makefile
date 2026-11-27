@@ -12,14 +12,18 @@ RELEASE_DATE = $(shell date +%Y-%m-%d)
 
 RELEASE_HASH=$(shell git log --pretty=format:'%h' -n 1)
 
-# Section 1 pages are the programs' own help text; none of these programs has a
-# section 3 or 7 page. The list is named, not globbed, so a missing .1.md fails
+# Section 1 pages are the programs' own help text; there is no section 3 page, and section 7
+# pages are one per help topic. The lists are named, not globbed, so a missing .1.md fails
 # `make man` instead of dropping the page; makefile_test.go will check it matches the files.
 MAN_PAGES_1 = $(addsuffix .1,$(PROGRAMS))
 
 MAN_PAGES_3 = $(patsubst %.3.md,%.3,$(wildcard *.3.md))
 
-MAN_PAGES_7 = $(patsubst %.7.md,%.7,$(wildcard *.7.md))
+# TOPICS names the help topics, as `cmarkfind help index` lists them (a test checks
+# this). Each is written to cmarkfind-TOPIC.7.md by `make build`.
+TOPICS = fill search stats forget exclude unexclude query corpus exit-status
+
+MAN_PAGES_7 = $(foreach p,$(PROGRAMS),$(addprefix $(p)-,$(addsuffix .7,$(TOPICS))))
 
 HTML_PAGES = $(shell find . -type f -not -path './bin/*' -not -path './.git/*' | grep -E '\.html$$')
 
@@ -66,7 +70,7 @@ version.go: .FORCE
 hash: .FORCE
 	git log --pretty=format:'%h' -n 1
 
-man: $(MAN_PAGES_1) # $(MAN_PAGES_3) $(MAN_PAGES_7)
+man: $(MAN_PAGES_1) $(MAN_PAGES_7) # $(MAN_PAGES_3)
 
 $(MAN_PAGES_1): .FORCE
 	mkdir -p man/man1
@@ -84,6 +88,7 @@ $(PROGRAMS): $(PACKAGE)
 	@mkdir -p bin
 	go build -o "bin/$@$(EXT)" cmd/$@/*.go
 	@./bin/$@ -help >$@.1.md
+	@for topic in $(TOPICS); do ./bin/$@ help $$topic >$@-$$topic.7.md; done
 
 CITATION.cff: .FORCE
 	cmt codemeta.json CITATION.cff

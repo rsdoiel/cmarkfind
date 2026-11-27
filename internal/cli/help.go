@@ -77,8 +77,10 @@ unexclude PREFIX
 : Remove an exclusion. Pages come back with the next fill. Exit 1 if there was
   no such rule.
 
-help [VERB]
-: Show this page, or one verb's part.
+help [TOPIC]
+: Show this page, or one topic's page. help index lists the topics: one for
+  each verb, and query, corpus and exit-status. Each is also a manual page of
+  section 7, cmarkfind-TOPIC(7).
 
 # OPTIONS
 
@@ -139,73 +141,9 @@ help [VERB]
 
 # SEE ALSO
 
+cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-stats(7), cmarkfind-forget(7),
+cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-query(7),
+cmarkfind-corpus(7), cmarkfind-exit-status(7)
+
 markdownweb, cmarkbrowser, BonBon (Dave Winer)
 `
-
-// verbHelp is the part of the page `help VERB` shows.
-var verbHelp = map[string]string{
-	"fill": `fill [OPTIONS] SOURCE
-
-Read the pages a site's table of contents lists and store them. SOURCE is a
-folder (nothing is fetched) or an http:// or https:// address (the site's
-address, or its toc.opml).
-
-  -pause DURATION   wait between requests to one host (default 1s)
-  -robots           obey robots.txt (default true; -robots=false to ignore it)
-  -user-agent TEXT  the User-Agent sent (default cmarkfind/VERSION)
-  -max-pages N      list at most N pages from the table of contents
-  -depth N          follow included outlines N levels
-  -batch N          ask about at most N pages, then stop (web sites only);
-                    never-asked pages first, then oldest checked
-  -every DURATION   with -batch: another batch every DURATION until interrupted
-  -until-done       with -every: stop when no listed page is unasked
-  -json             write the report as JSON
-`,
-	"search": `search [OPTIONS] QUERY...
-
-Search the corpus: words, "phrases", AND, OR, NOT, word*. Text that is not
-valid query syntax is searched as plain words.
-
-  -limit N   at most N hits (default 10)
-  -json      write {"hits": [...], "searched": N}
-
-Exit 1 when nothing matches. Use -- before a query that starts with a dash.
-`,
-	"forget": `forget [OPTIONS] SITE
-forget -all
-
-Delete the pages stored from one site (a folder or an address, named as for
-fill), or every page. Exclusions are kept.
-
-  -all       forget every page
-  -dry-run   say how many pages would go; delete nothing
-  -json      write {"forgotten": N, "dry_run": false}
-
-Exit 1 when SITE stored nothing.
-`,
-	"exclude": `exclude [OPTIONS] PREFIX
-exclude -list
-
-Keep every page whose address starts with PREFIX out of the corpus. Stored pages
-under it are deleted; later fills skip them and do not request them. PREFIX is
-an http:// or https:// address, matched as plain text, so end a folder with a
-slash: https://example.org/drafts/ (without the slash, drafts-old matches too).
-
-  -list   show the rules
-  -json   write the result as JSON
-`,
-	"unexclude": `unexclude PREFIX
-
-Remove an exclusion. Pages it kept out come back with the next fill. Exit 1 if
-there was no such rule.
-
-  -json   write {"prefix": ..., "removed": true|false}
-`,
-	"stats": `stats [OPTIONS]
-
-Say what the corpus holds: pages, pages gone, counts by site and tier, file
-size and schema version.
-
-  -json   write the result as JSON
-`,
-}

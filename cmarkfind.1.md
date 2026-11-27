@@ -2,8 +2,8 @@
 title: cmarkfind
 section: 1
 header: user manual
-footer: version 0.0.0 f1fb931
-date: 2026-11-25
+footer: version 0.0.1 a159457
+date: 2026-11-26
 author: R. S. Doiel
 ---
 
@@ -68,8 +68,10 @@ unexclude PREFIX
 : Remove an exclusion. Pages come back with the next fill. Exit 1 if there was
   no such rule.
 
-help [VERB]
-: Show this page, or one verb's part.
+help [TOPIC]
+: Show this page, or one topic's page. help index lists the topics: one for
+  each verb, and query, corpus and exit-status. Each is also a manual page of
+  section 7, cmarkfind-TOPIC(7).
 
 # OPTIONS
 
@@ -129,5 +131,9 @@ help [VERB]
     cmarkfind forget ~/Sites/example.org
 
 # SEE ALSO
+
+cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-stats(7), cmarkfind-forget(7),
+cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-query(7),
+cmarkfind-corpus(7), cmarkfind-exit-status(7)
 
 markdownweb, cmarkbrowser, BonBon (Dave Winer)

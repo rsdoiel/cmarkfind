@@ -12,8 +12,8 @@
     }
   ],
   "dateCreated": "2026-04-25",
-  "dateModified": "2026-11-25",
-  "description": "CMarkFind is a Go module inspired by PageFind. It seeks to provide a personal search engine for the Markdown Web and be embedded in Markdown Web browsers like cmarkbrowser of potentially BonBon.",
+  "dateModified": "2026-11-26",
+  "description": "cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with FTS5. cmarkbrowser searches the same file.",
   "keywords": [
     "personal search engine",
     "Markdown",
@@ -26,19 +26,21 @@
   "programmingLanguage": [
     "Go"
   ],
-  "version": "0.0.0",
+  "version": "0.0.1",
   "developmentStatus": "concept",
   "issueTracker": "https://github.com/rsdoiel/cmarkfind/issues",
   "copyrightYear": 2026,
   "copyrightHolder": "R. S. Doiel",
   "softwareRequirements": [
     "Go >= 1.27.4",
-    "github.com/rsdoiel/markdownweb >= 0.0.4",
+    "github.com/rsdoiel/markdownweb >= 0.0.5",
     "github.com/glebarez/go-sqlite >= 1.23.0"
   ],
   "softwareSuggestions": [
     "CMTools >= 0.0.45b",
     "Pandoc >= 3.9",
     "GNU Make >= 3"
-  ]
+  ],
+  "datePublished": "2026-11-26",
+  "releaseNotes": "- first release: a corpus of Markdown pages in one SQLite3 FTS5 file (pure Go, no cgo), searched locally with bm25 ranking\n- fill reads a site's toc.opml from a folder or over the web, politely (pause per host, robots.txt, conditional requests), in resumable batches (-batch, -every, -until-done)\n- verbs: fill, search, stats, forget, exclude, unexclude, help (help index lists nine topics, each a section 7 man page); -json everywhere; exit codes per the workspace convention\n- the next cmarkbrowser release searches and fills the same corpus (S, F, -find)"
 }

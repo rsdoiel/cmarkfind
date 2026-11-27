@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-exit-status.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-exit-status — what the exit codes mean</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>cmarkfind uses the exit codes of the workspace convention. With -json
+a failure is also written to standard output as {“error”: “…”, “class”:
+“…”, “code”: N}.</p>
+<h1 id="exit-status">EXIT STATUS</h1>
+<dl>
+<dt>0</dt>
+<dd>
+Success.
+</dd>
+<dt>1</dt>
+<dd>
+The answer is no: search found nothing; forget’s SITE or unexclude’s
+PREFIX had nothing to act on; robots.txt forbids the table of contents.
+</dd>
+<dt>2</dt>
+<dd>
+Bad command line: unknown verb, option or topic, missing argument, bad
+value.
+</dd>
+<dt>65</dt>
+<dd>
+The file is not a corpus or has a newer schema; a source is malformed.
+</dd>
+<dt>66</dt>
+<dd>
+A folder, the corpus (for search and stats) or a table of contents is
+missing.
+</dd>
+<dt>69</dt>
+<dd>
+The site cannot be reached.
+</dd>
+<dt>70</dt>
+<dd>
+A bug.
+</dd>
+<dt>73</dt>
+<dd>
+The corpus file or its directory cannot be created.
+</dd>
+<dt>75</dt>
+<dd>
+The corpus is locked by another program; try again.
+</dd>
+<dt>77</dt>
+<dd>
+The system refused access.
+</dd>
+</dl>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-corpus(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-exit-status.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-query.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-query — the search syntax</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>A query is SQLite’s FTS5 syntax, searched over each page’s title,
+description and body.</p>
+<pre><code>oberon compiler          both words (AND is implied)
+oberon OR modula         either word
+oberon NOT pascal        the first and not the second
+&quot;shallow water&quot;          the words next to each other, in order
+compil*                  words that start with compil</code></pre>
+<p>Case does not matter. A title match counts for more than a
+description match, and a description match for more than one in the body
+(bm25 with weights 4, 2 and 1). Hits that rank the same are put in the
+order bookmarked, read, own, toc pages, then by address.</p>
+<p>Text that is not valid FTS5 syntax (an unbalanced quote, a stray
+operator) is searched as plain words, so a typo returns hits and not an
+error. Pages marked gone are not searched.</p>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind search &#39;&quot;shallow water&quot; NOT tide&#39;
+cmarkfind search -- -dash</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind-search(7), cmarkfind-corpus(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-query.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

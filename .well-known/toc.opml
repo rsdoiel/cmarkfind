@@ -2,12 +2,22 @@
 <opml version="2.0">
 	<head>
 		<title>cmarkfind</title>
-		<dateModified>Wed, 25 Nov 2026 10:25:16 -0800</dateModified>
+		<dateModified>Thu, 26 Nov 2026 17:01:43 -0800</dateModified>
 	</head>
 	<body>
 		<outline text="Pages">
 			<outline text="cmarkfind" url="https://rsdoiel.github.io/cmarkfind/index.md"></outline>
 			<outline text="cmarkfind" url="https://rsdoiel.github.io/cmarkfind/cmarkfind.1.md"></outline>
+			<outline text="cmarkfind-fill" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-fill.7.md"></outline>
+			<outline text="cmarkfind-search" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-search.7.md"></outline>
+			<outline text="cmarkfind-stats" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-stats.7.md"></outline>
+			<outline text="cmarkfind-forget" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-forget.7.md"></outline>
+			<outline text="cmarkfind-exclude" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-exclude.7.md"></outline>
+			<outline text="cmarkfind-unexclude" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-unexclude.7.md"></outline>
+			<outline text="cmarkfind-query" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-query.7.md"></outline>
+			<outline text="cmarkfind-corpus" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-corpus.7.md"></outline>
+			<outline text="cmarkfind-exit-status" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-exit-status.7.md"></outline>
+			<outline text="Change log" url="https://rsdoiel.github.io/cmarkfind/CHANGES.md"></outline>
 			<outline text="INSTALL" url="https://rsdoiel.github.io/cmarkfind/INSTALL.md"></outline>
 			<outline text="INSTALL_NOTES_macOS" url="https://rsdoiel.github.io/cmarkfind/INSTALL_NOTES_macOS.md"></outline>
 			<outline text="INSTALL_NOTES_Windows" url="https://rsdoiel.github.io/cmarkfind/INSTALL_NOTES_Windows.md"></outline>

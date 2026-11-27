@@ -1,10 +1,8 @@
 Installation for development of **cmarkfind**
 ===========================================
 
-**cmarkfind** CMarkFind is a Go module inspired by PageFind. Instead of working with HTML, 
-CMarkFind works withe CommonMark documents and their front matter.
-It can create the indexes suitable for a static website search and
-also allows those indexes to be reused on the command line.
+**cmarkfind** is a personal search engine for the Markdown web. It keeps the pages of the
+sites you read in one SQLite3 file and searches them locally.
 
 Quick install with curl or irm
 ------------------------------
@@ -12,7 +10,7 @@ Quick install with curl or irm
 There is an experimental installer.sh script that can be run with the following command to install latest table release. This may work for macOS, Linux and if you’re using Windows with the Unix subsystem. This would be run from your shell (e.g. Terminal on macOS).
 
 ~~~shell
-curl https://Laboratory.github.io/cmarkfind/installer.sh | sh
+curl https://rsdoiel.github.io/cmarkfind/installer.sh | sh
 ~~~
 
 This will install the programs included in cmarkfind in your `$HOME/bin` directory.
@@ -20,7 +18,7 @@ This will install the programs included in cmarkfind in your `$HOME/bin` directo
 If you are running Windows 10 or 11 use the Powershell command below.
 
 ~~~ps1
-irm https://Laboratory.github.io/cmarkfind/installer.ps1 | iex
+irm https://rsdoiel.github.io/cmarkfind/installer.ps1 | iex
 ~~~
 
 ### If your are running macOS or Windows

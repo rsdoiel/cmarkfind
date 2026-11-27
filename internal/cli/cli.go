@@ -120,12 +120,23 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 			help()
 			return ExitOK
 		}
-		text, ok := verbHelp[rest[0]]
-		if !ok {
-			return o.fail(fmt.Errorf("%w: no help for %q", ErrUsage, rest[0]))
+		asJSON := false
+		var topic string
+		for _, a := range rest {
+			if a == "-json" || a == "--json" {
+				asJSON = true
+			} else if topic == "" {
+				topic = a
+			} else {
+				return o.fail(fmt.Errorf("%w: help takes one topic", ErrUsage))
+			}
 		}
-		fmt.Fprint(stdout, text)
-		return ExitOK
+		o.json = asJSON
+		if topic == "" {
+			help()
+			return ExitOK
+		}
+		return o.fail(helpTopic(stdout, topic, asJSON))
 	case "fill":
 		return o.fail(o.fill(ctx, dbFile, rest))
 	case "search":

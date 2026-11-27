@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/glebarez/go-sqlite v1.23.0
-	github.com/rsdoiel/markdownweb v0.0.4
+	github.com/rsdoiel/markdownweb v0.0.5
 )
 
 require (

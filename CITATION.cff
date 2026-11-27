@@ -4,7 +4,7 @@ message: "If you use this software, please cite it as below."
 type: software
 title: cmarkfind
 abstract: |-
-  CMarkFind is a Go module inspired by PageFind. It seeks to provide a personal search engine for the Markdown Web and be embedded in Markdown Web browsers like cmarkbrowser of potentially BonBon.
+  cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with FTS5. cmarkbrowser searches the same file.
 authors:
   - family-names: Doiel
     given-names: R. S.
@@ -13,8 +13,8 @@ authors:
 
 
 repository-code: "https://github.com/rsdoiel/cmarkfind"
-version: 0.0.0
-
+version: 0.0.1
+date-released: 2026-11-26
 
 license-url: "https://www.gnu.org/licenses/agpl-3.0.txt"
 keywords:

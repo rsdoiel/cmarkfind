@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-exclude.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-exclude — keep an address prefix out of the corpus</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind exclude <a href="#options">OPTIONS</a> PREFIX</p>
+<p>cmarkfind exclude -list</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Keep every page whose address starts with PREFIX out of the corpus.
+Stored pages under it are deleted; later fills skip them and do not
+request them.</p>
+<p>PREFIX is an http:// or https:// address, matched as plain text, so
+end a folder with a slash: https://example.org/drafts/ (without the
+slash, https://example.org/drafts-old matches too).</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-list</dt>
+<dd>
+Show the rules.
+</dd>
+<dt>-json</dt>
+<dd>
+Write the result as JSON.
+</dd>
+</dl>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind exclude https://example.org/drafts/
+cmarkfind exclude -list</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-unexclude(7), cmarkfind-forget(7),
+cmarkfind-fill(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-exclude.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

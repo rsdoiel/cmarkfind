@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-forget.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-forget — delete a site’s pages, or every page</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind forget <a href="#options">OPTIONS</a> SITE</p>
+<p>cmarkfind forget -all</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Delete the pages stored from one site (a folder or an address, named
+as for cmarkfind-fill(7)), or every page. Exclusions are kept, so a
+later fill does not bring back what exclude keeps out.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-all</dt>
+<dd>
+Forget every page.
+</dd>
+<dt>-dry-run</dt>
+<dd>
+Say how many pages would go; delete nothing.
+</dd>
+<dt>-json</dt>
+<dd>
+Write {“forgotten”: N, “dry_run”: false}.
+</dd>
+</dl>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>1 when SITE stored nothing. See cmarkfind-exit-status(7).</p>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind forget -dry-run https://example.org
+cmarkfind forget ~/Sites/example.org</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-exclude(7), cmarkfind-fill(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-forget.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>
