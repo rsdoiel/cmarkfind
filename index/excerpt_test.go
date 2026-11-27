@@ -6,25 +6,6 @@ import (
 	"testing"
 )
 
-func TestSlugRule(t *testing.T) {
-	for _, c := range []struct{ in, want string }{
-		{"Soil", "soil"},
-		{"Hello, World!", "hello-world"},
-		{"Soil & Seeds", "soil--seeds"},
-		{"  Padded  heading ", "padded--heading"},
-		{"State-of-the-art", "state-of-the-art"},
-		{"Ünïcode Ünder", "ünïcode-ünder"},
-		{"Section 2.1", "section-21"},
-		{"snake_case name", "snake_case-name"},
-		{"!!!", ""},
-		{"", ""},
-	} {
-		if got := Slug(c.in); got != c.want {
-			t.Errorf("Slug(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
 func anchorDoc() Doc {
 	return Doc{
 		Address:     "https://example.org/g.md",

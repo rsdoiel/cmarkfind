@@ -4,38 +4,10 @@ import (
 	"html"
 	"sort"
 	"strings"
-	"unicode"
 )
 
 // DefaultExcerptWords is the length of an excerpt window when none is given.
 const DefaultExcerptWords = 30
-
-/** Slug is the fragment identifier of a heading, by the GitHub rule that most
- * Markdown sites follow: lower case; letters, marks, digits, "-" and "_" are
- * kept; each space becomes "-"; everything else is dropped. Equal headings on
- * one page are made unique by the writer (-1, -2, ...), not here.
- *
- * Parameters:
- *   heading (string) — the heading's text without Markdown syntax
- *
- * Returns:
- *   string — the slug; empty when nothing is left
- *
- * Example:
- *   s := index.Slug("Soil & Seeds") // "soil--seeds"
- */
-func Slug(heading string) string {
-	var sb strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(heading)) {
-		switch {
-		case r == ' ':
-			sb.WriteByte('-')
-		case r == '-' || r == '_' || unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r):
-			sb.WriteRune(r)
-		}
-	}
-	return sb.String()
-}
 
 /** Mark is one hit word of a page: its position in the fragment text and the
  * weight of the field it is in (title 4, description 2, body 1).

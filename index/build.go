@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/rsdoiel/markdownweb/slug"
 )
 
 // DefaultChunkEntries is the default number of entries (a posting plus one
@@ -108,7 +110,7 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 		var segments [][2]uint64
 		var occ = map[string][]occurrence{}
 		var anchors []anchorRec
-		seen := map[string]int{}
+		slugs := slug.New()
 		for _, p := range parts {
 			plain, heads := markdownText(p.text)
 			ws := Words(plain)
@@ -119,17 +121,14 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 			for _, h := range heads {
 				before += len(Words(plain[prev:h.offset]))
 				prev = h.offset
-				slug := Slug(h.text)
-				if slug == "" || len(Words(h.text)) == 0 {
+				if len(Words(h.text)) == 0 {
 					continue
 				}
-				if k := seen[slug]; k > 0 {
-					seen[slug]++
-					slug = fmt.Sprintf("%s-%d", slug, k)
-				} else {
-					seen[slug] = 1
+				sl := slugs.Next(h.text)
+				if sl == "" {
+					continue
 				}
-				anchors = append(anchors, anchorRec{Slug: slug, Heading: h.text, Position: uint64(base + before), Level: uint64(h.level)})
+				anchors = append(anchors, anchorRec{Slug: sl, Heading: h.text, Position: uint64(base + before), Level: uint64(h.level)})
 			}
 			segments = append(segments, [2]uint64{uint64(p.weight), uint64(len(ws))})
 			for _, w := range ws {
