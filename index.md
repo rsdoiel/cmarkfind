@@ -1,7 +1,7 @@
 
 # cmarkfind
 
-cmarkfind is a personal search engine for the Markdown web. It keeps the pages of the sites you read in one SQLite3 file and searches them locally with FTS5; nothing is sent anywhere by a search. It fills the file from a site's table of contents (`/.well-known/toc.opml`), from a folder on disk or over the web, using [markdownweb](https://github.com/rsdoiel/markdownweb). [cmarkbrowser](https://github.com/rsdoiel/cmarkbrowser) searches the same file.
+cmarkfind is a personal search engine for the Markdown web. It keeps the pages of the sites you read in one SQLite3 file and searches them locally through an index it builds from them; nothing is sent anywhere by a search. It fills the file from a site's table of contents (`/.well-known/toc.opml`), from a folder on disk or over the web, using [markdownweb](https://github.com/rsdoiel/markdownweb). [cmarkbrowser](https://github.com/rsdoiel/cmarkbrowser) searches the same file.
 
 ~~~shell
 cmarkfind fill https://rsdoiel.github.io

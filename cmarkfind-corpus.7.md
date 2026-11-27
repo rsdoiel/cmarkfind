@@ -16,8 +16,9 @@ cmarkfind-corpus — the file cmarkfind keeps
 The corpus is one SQLite3 file. It holds, for each page, its address, site,
 title, description, date, body, a hash of its content, the ETag and
 Last-Modified the site sent, when it was fetched and last checked, its tier, and
-when it was found gone. An FTS5 index over title, description and body does the
-searching. Nothing leaves the machine when you search.
+when it was found gone. A search index over title, description and body does the
+searching; it is built from the pages after each fill and kept in a folder
+beside the file (cmarkfind-indexer(7)). Nothing leaves the machine when you search.
 
 The file is named, in this order, by -db FILE, by the CMARKFIND_DB variable, or
 it is cmarkfind/corpus.db in your user data directory. fill creates it; search
@@ -29,7 +30,8 @@ read over the web), read (a page you read in cmarkbrowser) or bookmarked. It
 breaks ties between hits that rank the same.
 
 The file carries a schema version. A file from an older cmarkfind is upgraded in
-place; a file from a newer one is refused (exit 65), and the file is not
+place (schema 5 drops the old FTS5 table; the file keeps its size until you run
+VACUUM on it); a file from a newer one is refused (exit 65), and the file is not
 changed.
 
 Page text comes from sites you do not control. Search results show it as text

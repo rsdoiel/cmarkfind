@@ -1,7 +1,8 @@
 /** Package oracle measures the partitioned index against FTS5 on a corpus.
  *
- * It is the Phase 4 harness: the same questions go through the corpus's FTS5
- * search and through an index built from the same pages, and the report says
+ * It is the Phase 4 harness: the same questions go through a scratch FTS5
+ * table built from the corpus's pages (the corpus itself no longer has one) and
+ * through an index built from the same pages, and the report says
  * how far the answers agree (top-k overlap, the sets, the cause of each
  * difference), what each costs (latency, rebuild time, disk) and whether the
  * index agrees with a brute-force scan of the pages. The scan needs neither
@@ -159,16 +160,21 @@ func Run(ctx context.Context, db *corpus.DB, qs []Query, opt Options) (*Report, 
 		}
 	}
 	r.IndexBytes = dirBytes(dir)
+	fts, err := buildFTS(ctx, filepath.Join(tmp, "fts.db"), pages)
+	if err != nil {
+		return nil, err
+	}
+	defer fts.db.Close()
 	if opt.DBPath != "" {
 		r.CorpusBytes = fileBytes(opt.DBPath) + fileBytes(opt.DBPath+"-wal")
-		r.FTSBytes = ftsBytes(opt.DBPath)
 	}
+	r.FTSBytes = ftsBytes(fts.path)
 	ix, err := index.Open(dir)
 	if err != nil {
 		return nil, err
 	}
 	for _, q := range qs {
-		row, err := one(ctx, db, ix, pages, q, opt)
+		row, err := one(ctx, fts, ix, pages, q, opt)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", q.Name, err)
 		}
@@ -179,13 +185,13 @@ func Run(ctx context.Context, db *corpus.DB, qs []Query, opt Options) (*Report, 
 
 const all = 1 << 20
 
-func one(ctx context.Context, db *corpus.DB, ix *index.Index, pages []corpus.IndexPage, q Query, opt Options) (*Row, error) {
+func one(ctx context.Context, fts *ftsRef, ix *index.Index, pages []corpus.IndexPage, q Query, opt Options) (*Row, error) {
 	n, err := index.ParseQuery(q.Index, nil)
 	if err != nil {
 		return nil, err
 	}
 	row := &Row{Query: q}
-	ftsRes, err := db.SearchWith(ctx, q.FTS, corpus.SearchOptions{Limit: all})
+	ftsAll, err := fts.search(ctx, q.FTS, all)
 	if err != nil {
 		return nil, err
 	}
@@ -193,18 +199,15 @@ func one(ctx context.Context, db *corpus.DB, ix *index.Index, pages []corpus.Ind
 	if err != nil {
 		return nil, err
 	}
-	var fts, idx []string
-	for _, h := range ftsRes.Hits {
-		fts = append(fts, h.Address)
-	}
+	ftsHits, idx := ftsAll, []string(nil)
 	for _, h := range idxHits {
 		idx = append(idx, h.Address)
 	}
 	brute := Brute(pages, n)
-	row.FTSCount, row.IndexCount, row.BruteCount = len(fts), len(idx), len(brute)
-	row.Overlap = overlap(fts, idx, opt.K)
-	row.FTSTop, row.IndexTop = head(fts, opt.K), head(idx, opt.K)
-	row.OnlyFTS, row.OnlyIndex = diff(fts, idx), diff(idx, fts)
+	row.FTSCount, row.IndexCount, row.BruteCount = len(ftsHits), len(idx), len(brute)
+	row.Overlap = overlap(ftsHits, idx, opt.K)
+	row.FTSTop, row.IndexTop = head(ftsHits, opt.K), head(idx, opt.K)
+	row.OnlyFTS, row.OnlyIndex = diff(ftsHits, idx), diff(idx, ftsHits)
 	row.IndexVsBrute = len(diff(idx, brute)) + len(diff(brute, idx))
 	raw := rawSet(pages, n)
 	for _, a := range row.OnlyFTS {
@@ -216,7 +219,7 @@ func one(ctx context.Context, db *corpus.DB, ix *index.Index, pages []corpus.Ind
 	}
 	row.Unexplained += len(row.OnlyIndex)
 	row.FTSTime = median(opt.Repeats, func() error {
-		_, err := db.SearchWith(ctx, q.FTS, corpus.SearchOptions{Limit: opt.K})
+		_, err := fts.search(ctx, q.FTS, opt.K)
 		return err
 	})
 	row.IndexTime = median(opt.Repeats, func() error {
@@ -397,19 +400,73 @@ func dirBytes(dir string) int64 {
 	return n
 }
 
-// ftsBytes reads the pages the FTS5 tables take from dbstat; 0 when the build
-// of SQLite has no dbstat.
-func ftsBytes(path string) int64 {
-	raw, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+// ftsRef is the scratch FTS5 table the index is compared with: the pages'
+// title, description and body, ranked as the corpus ranked before the switch
+// (bm25 weights 4, 2, 1 rounded to two places, then address).
+type ftsRef struct {
+	db   *sql.DB
+	path string
+}
+
+func buildFTS(ctx context.Context, path string, pages []corpus.IndexPage) (*ftsRef, error) {
+	raw, err := sql.Open("sqlite", "file:"+path)
 	if err != nil {
-		return 0
+		return nil, err
 	}
-	defer raw.Close()
-	var n sql.NullInt64
-	if raw.QueryRow(`SELECT sum(pgsize) FROM dbstat WHERE name LIKE 'pages_fts%'`).Scan(&n) != nil {
-		return 0
+	raw.SetMaxOpenConns(1)
+	if _, err := raw.ExecContext(ctx, `CREATE VIRTUAL TABLE pages_fts USING fts5(address UNINDEXED, title, description, body)`); err != nil {
+		raw.Close()
+		return nil, err
 	}
-	return n.Int64
+	tx, err := raw.BeginTx(ctx, nil)
+	if err != nil {
+		raw.Close()
+		return nil, err
+	}
+	for _, p := range pages {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO pages_fts(address, title, description, body) VALUES (?, ?, ?, ?)`, p.Address, p.Title, p.Description, p.Body); err != nil {
+			tx.Rollback()
+			raw.Close()
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		raw.Close()
+		return nil, err
+	}
+	return &ftsRef{db: raw, path: path}, nil
+}
+
+// search answers an FTS5 query with up to limit addresses, best first; input
+// FTS5 cannot parse is searched as quoted words, as the corpus once did.
+func (f *ftsRef) search(ctx context.Context, q string, limit int) ([]string, error) {
+	const stmt = `SELECT address, snippet(pages_fts, -1, '[', ']', '…', 14) FROM pages_fts WHERE pages_fts MATCH ?
+		ORDER BY round(bm25(pages_fts, 0.0, 4.0, 2.0, 1.0), 2), address LIMIT ?`
+	rows, err := f.db.QueryContext(ctx, stmt, q, limit)
+	if err != nil {
+		var words []string
+		for _, w := range strings.Fields(q) {
+			words = append(words, `"`+strings.ReplaceAll(w, `"`, `""`)+`"`)
+		}
+		if rows, err = f.db.QueryContext(ctx, stmt, strings.Join(words, " "), limit); err != nil {
+			return nil, err
+		}
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var a, snip string
+		if err := rows.Scan(&a, &snip); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ftsBytes is the size of the scratch FTS5 file: the tables hold nothing else.
+func ftsBytes(path string) int64 {
+	return fileBytes(path)
 }
 
 /** Write prints the report as Markdown: the costs, then one row per query.
@@ -423,7 +480,7 @@ func ftsBytes(path string) int64 {
 func (r *Report) Write(w io.Writer) {
 	fmt.Fprintf(w, "- pages: %d; top-k: %d\n", r.Pages, r.K)
 	fmt.Fprintf(w, "- rebuild (best of 3): %s; index: %d bytes\n", r.Rebuild, r.IndexBytes)
-	fmt.Fprintf(w, "- corpus file: %d bytes, of which FTS5 tables: %d bytes\n\n", r.CorpusBytes, r.FTSBytes)
+	fmt.Fprintf(w, "- corpus file: %d bytes, scratch FTS5 file for comparison: %d bytes\n\n", r.CorpusBytes, r.FTSBytes)
 	fmt.Fprintln(w, "| query | FTS5 | index | brute | overlap | only FTS5 | only index | explained | unexplained | index≠brute | FTS5 time | index time |")
 	fmt.Fprintln(w, "|---|---|---|---|---|---|---|---|---|---|---|---|")
 	for _, x := range r.Rows {

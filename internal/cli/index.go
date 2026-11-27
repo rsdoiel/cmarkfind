@@ -3,14 +3,11 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/rsdoiel/cmarkfind/corpus"
 	"github.com/rsdoiel/cmarkfind/index"
 )
 
@@ -26,12 +23,7 @@ import (
  * Example:
  *   d := cli.DefaultIndexDir("/home/me/.local/share/cmarkfind/corpus.db") // ".../cmarkfind/index"
  */
-func DefaultIndexDir(dbFile string) string {
-	if d := os.Getenv("CMARKFIND_INDEX"); d != "" {
-		return d
-	}
-	return filepath.Join(filepath.Dir(dbFile), "index")
-}
+func DefaultIndexDir(dbFile string) string { return corpus.DefaultIndexDir(dbFile) }
 
 // indexDir takes the optional DIR argument of an index verb.
 func indexDir(dbFile, verb string, args []string) (string, error) {
@@ -89,34 +81,12 @@ func (o *out) indexBuild(ctx context.Context, dbFile string, args []string) erro
 		return err
 	}
 	defer db.Close()
-	pages, err := db.IndexPages(ctx)
-	if err != nil {
-		return err
-	}
-	docs := make([]index.Doc, len(pages))
-	for i, p := range pages {
-		docs[i] = index.Doc{Address: p.Address, Title: p.Title, Description: p.Description, Body: p.Body}
-	}
-	gen := uint64(1)
-	if old, err := index.Open(dir); err == nil {
-		gen = old.Generation() + 1
-	}
-	if err := index.Build(dir, docs, index.BuildOptions{ChunkEntries: *chunk, Generation: gen}); err != nil {
-		if index.IsDataError(err) || errors.Is(err, fs.ErrPermission) {
-			return err
-		}
-		return fmt.Errorf("%w: %v", ErrCantCreate, err)
-	}
-	pruned, err := index.Prune(dir)
-	if err != nil {
-		return err
-	}
-	ix, err := index.Open(dir)
+	ix, err := db.BuildIndex(ctx, dir, *chunk)
 	if err != nil {
 		return err
 	}
 	if o.json {
-		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "pruned": pruned})
+		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation()})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 		return nil
 	}

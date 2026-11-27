@@ -30,8 +30,9 @@ author: R. S. Doiel
 
 {app_name} keeps a corpus of Markdown pages in one SQLite file and searches it
 locally. It fills the corpus from a site's table of contents
-(/.well-known/toc.opml), from a folder on disk or over the web, and searches
-with SQLite's FTS5 query language. Nothing is sent anywhere by a search.
+(/.well-known/toc.opml), from a folder on disk or over the web, builds a search
+index from the pages after each fill, and searches that index with a
+Lucene-style query language. Nothing is sent anywhere by a search.
 
 # VERBS
 

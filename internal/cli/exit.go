@@ -59,7 +59,7 @@ func Classify(err error) (int, string) {
 		return ExitUsage, "usage"
 	case errors.Is(err, fs.ErrPermission):
 		return ExitNoPermission, "no_permission"
-	case errors.Is(err, ErrCantCreate):
+	case errors.Is(err, ErrCantCreate), errors.Is(err, corpus.ErrIndex):
 		return ExitCantCreate, "cant_create"
 	case errors.Is(err, corpus.ErrLocked):
 		return ExitTempFail, "temp_fail"

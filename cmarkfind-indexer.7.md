@@ -34,8 +34,10 @@ validate reads every file and checks it against the digest in manifest.json.
 list says what an index holds: pages, chunks, generation and when it was built.
 
 DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
-named index beside the corpus file (so -db moves both). Plain search does not
-read an index; only search -index does.
+named index beside the corpus file (so -db moves both). The corpus builds its own index in that folder after every fill, forget or
+exclude that changed pages, and plain search reads it; a search finding it
+missing, or built by something else, builds it first. indexer build rebuilds it
+by hand, and search -index DIR searches any other index.
 
 # OPTIONS
 

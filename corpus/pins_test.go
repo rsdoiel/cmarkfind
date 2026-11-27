@@ -391,7 +391,7 @@ func TestAVersion3FileUpgradesInPlaceAndKeepsEverything(t *testing.T) {
 	}
 	var v string
 	db2.sql.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&v)
-	if v != "4" || SchemaVersion != 4 {
+	if v != "5" || SchemaVersion != 5 {
 		t.Errorf("schema_version %q, constant %d", v, SchemaVersion)
 	}
 }

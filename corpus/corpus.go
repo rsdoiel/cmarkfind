@@ -1,6 +1,6 @@
 // Package corpus keeps a personal corpus of Markdown pages in one SQLite
-// database with an FTS5 index, fills it from a site's table of contents, and
-// searches it locally (cmarkfind DR-0001). The database file is the contract
+// database, fills it from a site's table of contents, and searches it locally
+// through a partitioned index built from the pages (cmarkfind DR-0001). The database file is the contract
 // between programs: its schema carries a version in the meta table.
 package corpus
 
@@ -16,7 +16,7 @@ import (
 )
 
 // SchemaVersion is the schema this package reads and writes.
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 var (
 	// ErrSchema says the file is not a corpus this package can use: not a
@@ -57,26 +57,14 @@ CREATE TABLE IF NOT EXISTS pages (
 	visited_last  TEXT NOT NULL DEFAULT '',
 	came_from     TEXT NOT NULL DEFAULT ''
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
-	title, description, body, content='pages', content_rowid='rowid'
-);
-CREATE TRIGGER IF NOT EXISTS pages_ai AFTER INSERT ON pages BEGIN
-	INSERT INTO pages_fts(rowid, title, description, body) VALUES (new.rowid, new.title, new.description, new.body);
-END;
-CREATE TRIGGER IF NOT EXISTS pages_ad AFTER DELETE ON pages BEGIN
-	INSERT INTO pages_fts(pages_fts, rowid, title, description, body) VALUES ('delete', old.rowid, old.title, old.description, old.body);
-END;
-CREATE TRIGGER IF NOT EXISTS pages_au AFTER UPDATE ON pages BEGIN
-	INSERT INTO pages_fts(pages_fts, rowid, title, description, body) VALUES ('delete', old.rowid, old.title, old.description, old.body);
-	INSERT INTO pages_fts(rowid, title, description, body) VALUES (new.rowid, new.title, new.description, new.body);
-END;
 `
 
 /** DB is an open corpus. It is safe for concurrent use; several programs may
  * open the same file (WAL mode).
  */
 type DB struct {
-	sql *sql.DB
+	sql  *sql.DB
+	path string
 }
 
 /** Open opens the corpus at path, creating it when the file does not exist.
@@ -125,13 +113,35 @@ func Open(path string) (*DB, error) {
 			return nil, fmt.Errorf("%w: %s has schema version %q, this program reads %d", ErrSchema, path, v, SchemaVersion)
 		}
 		if n < SchemaVersion { // the new tables were created above; record the upgrade
-			if _, err := raw.Exec(`UPDATE meta SET value = ? WHERE key = 'schema_version'`, strconv.Itoa(SchemaVersion)); err != nil {
+			if err := upgrade(raw, n); err != nil {
 				raw.Close()
 				return nil, classify(err)
 			}
 		}
 	}
-	return &DB{sql: raw}, nil
+	return &DB{sql: raw, path: path}, nil
+}
+
+// upgrade takes a file from schema version from to SchemaVersion. Version 5
+// drops the FTS5 table and its triggers (search reads the index now); the next
+// search builds the index.
+func upgrade(raw *sql.DB, from int) error {
+	tx, err := raw.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if from < 5 {
+		for _, q := range []string{`DROP TRIGGER IF EXISTS pages_ai`, `DROP TRIGGER IF EXISTS pages_ad`, `DROP TRIGGER IF EXISTS pages_au`, `DROP TABLE IF EXISTS pages_fts`} {
+			if _, err := tx.Exec(q); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := tx.Exec(`UPDATE meta SET value = ? WHERE key = 'schema_version'`, strconv.Itoa(SchemaVersion)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 /** Close closes the corpus.

@@ -62,16 +62,6 @@ type SearchOptions struct {
 
 const hitColumns = `p.address, p.title, p.site, p.tier, EXISTS(SELECT 1 FROM pins k WHERE k.address = p.address)`
 
-const searchSQL = `
-SELECT ` + hitColumns + `, snippet(pages_fts, -1, '[', ']', '…', 14)
-FROM pages_fts JOIN pages p ON p.rowid = pages_fts.rowid
-WHERE pages_fts MATCH ? AND p.gone_at = ''%s
-ORDER BY EXISTS(SELECT 1 FROM pins k WHERE k.address = p.address) DESC,
-	round(bm25(pages_fts, 4.0, 2.0, 1.0), 2),
-	CASE p.tier WHEN 'bookmarked' THEN 0 WHEN 'read' THEN 1 WHEN 'own' THEN 2 WHEN 'toc' THEN 3 ELSE 4 END,
-	p.address
-LIMIT ?`
-
 const listSQL = `
 SELECT ` + hitColumns + `, ''
 FROM pages p
@@ -97,9 +87,11 @@ func (d *DB) Search(ctx context.Context, query string, limit int) (*Results, err
 	return d.SearchWith(ctx, query, SearchOptions{Limit: limit})
 }
 
-/** SearchWith runs query over the corpus. The query is FTS5's language (words,
- * "phrases", AND, OR, NOT, word*); input that does not parse is searched as
- * quoted words, so punctuation is never a syntax error. Pages marked gone are
+/** SearchWith runs query over the corpus. The query is the index's Lucene subset
+ * (words, "phrases", AND, OR, NOT, +, -, word*, title:, description:, body:,
+ * parentheses); input that does not parse is read as words, so punctuation is
+ * never a syntax error. The index is built after each fill and read here; a
+ * missing or foreign one is built first. Pages marked gone are
  * not searched. Ranking is bm25 with the title weighted most, a page the
  * person chose outranking one harvested in bulk when the scores tie. Pinned
  * matches come first, in that same order. With a tag or pinned option and no
@@ -142,10 +134,7 @@ func (d *DB) SearchWith(ctx context.Context, query string, opts SearchOptions) (
 	var hits []Hit
 	switch {
 	case strings.TrimSpace(query) != "":
-		hits, err = d.run(ctx, fmt.Sprintf(searchSQL, frag), append(append([]any{query}, fargs...), limit))
-		if err != nil {
-			hits, err = d.run(ctx, fmt.Sprintf(searchSQL, frag), append(append([]any{quoteWords(query)}, fargs...), limit)) // not FTS5 syntax: search the words
-		}
+		hits, err = d.searchIndex(ctx, query, frag, fargs, limit)
 	case filtered:
 		hits, err = d.run(ctx, fmt.Sprintf(listSQL, frag), append(append([]any{}, fargs...), limit))
 	default:
@@ -178,16 +167,6 @@ func (d *DB) run(ctx context.Context, q string, args []any) ([]Hit, error) {
 		hits = append(hits, h)
 	}
 	return hits, rows.Err()
-}
-
-// quoteWords makes every whitespace-separated word a quoted FTS5 string, a
-// quote inside it doubled, so the whole is plain words and no syntax.
-func quoteWords(q string) string {
-	var out []string
-	for _, w := range strings.Fields(q) {
-		out = append(out, `"`+strings.ReplaceAll(w, `"`, `""`)+`"`)
-	}
-	return strings.Join(out, " ")
 }
 
 // pendingSQL is, per site, what it lists less what is stored (and not gone) and

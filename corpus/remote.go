@@ -84,6 +84,11 @@ func (d *DB) FillRemote(ctx context.Context, f *fetch.Fetcher, tocURL string, li
  *   r, err := db.FillRemoteWith(ctx, f, "https://example.org/.well-known/toc.opml", toc.Limits{}, corpus.FillOptions{Batch: 50})
  */
 func (d *DB) FillRemoteWith(ctx context.Context, f *fetch.Fetcher, tocURL string, lim toc.Limits, opts FillOptions) (*FillReport, error) {
+	rep, err := d.fillRemoteWith(ctx, f, tocURL, lim, opts)
+	return d.afterFill(ctx, rep, err)
+}
+
+func (d *DB) fillRemoteWith(ctx context.Context, f *fetch.Fetcher, tocURL string, lim toc.Limits, opts FillOptions) (*FillReport, error) {
 	if f == nil {
 		f = page.Fetcher()
 	}

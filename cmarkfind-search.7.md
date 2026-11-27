@@ -19,8 +19,11 @@ cmarkfind search [OPTIONS] QUERY...
 
 Search the corpus and print each hit's title, address and tier, and the
 matching text. The count and how many pages were searched go to standard error.
-QUERY is words, "phrases", AND, OR, NOT and word*; see cmarkfind-query(7).
-Text that is not valid query syntax is searched as plain words.
+QUERY is words, "phrases", AND, OR, NOT, -word, word* and title:word; see
+cmarkfind-query(7). Text that is not valid query syntax is searched as plain
+words. The search reads the index that the last fill built beside the corpus
+(cmarkfind-indexer(7)); when it is missing or is not the corpus's own, search
+builds it first, which takes a few seconds on a large corpus.
 
 # OPTIONS
 
@@ -28,9 +31,9 @@ Text that is not valid query syntax is searched as plain words.
 : At most N hits. Default 10.
 
 -index DIR
-: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus. The
-  query is then the Lucene-style language of cmarkfind-query(7); -tag and
-  -pinned do not apply. Exit 66 when DIR holds no index, 65 when it is damaged,
+: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus's
+  own index; the pins, tags and tiers of the corpus do not apply, so -tag and
+  -pinned do not either. Exit 66 when DIR holds no index, 65 when it is damaged,
   2 when the query is too large.
 
 -json

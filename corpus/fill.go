@@ -59,6 +59,11 @@ type FillReport struct {
  *   r, err := db.FillLocal(ctx, "/home/me/site", toc.Limits{})
  */
 func (d *DB) FillLocal(ctx context.Context, root string, lim toc.Limits) (*FillReport, error) {
+	rep, err := d.fillLocal(ctx, root, lim)
+	return d.afterFill(ctx, rep, err)
+}
+
+func (d *DB) fillLocal(ctx context.Context, root string, lim toc.Limits) (*FillReport, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err

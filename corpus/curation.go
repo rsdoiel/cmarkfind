@@ -36,6 +36,11 @@ type Exclusion struct {
  *   n, err := db.Forget(ctx, "https://example.org/.well-known/toc.opml")
  */
 func (d *DB) Forget(ctx context.Context, site string) (int, error) {
+	n, err := d.forget(ctx, site)
+	return n, d.afterChange(ctx, n > 0, err)
+}
+
+func (d *DB) forget(ctx context.Context, site string) (int, error) {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, classify(err)
@@ -67,6 +72,11 @@ func (d *DB) Forget(ctx context.Context, site string) (int, error) {
  *   n, err := db.ForgetAll(ctx)
  */
 func (d *DB) ForgetAll(ctx context.Context) (int, error) {
+	n, err := d.forgetAll(ctx)
+	return n, d.afterChange(ctx, n > 0, err)
+}
+
+func (d *DB) forgetAll(ctx context.Context) (int, error) {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, classify(err)
@@ -122,6 +132,11 @@ func (d *DB) CountSite(ctx context.Context, site string) (int, error) {
  *   n, err := db.Exclude(ctx, "https://example.org/drafts/")
  */
 func (d *DB) Exclude(ctx context.Context, prefix string) (int, error) {
+	n, err := d.exclude(ctx, prefix)
+	return n, d.afterChange(ctx, n > 0, err)
+}
+
+func (d *DB) exclude(ctx context.Context, prefix string) (int, error) {
 	if err := validPrefix(prefix); err != nil {
 		return 0, err
 	}

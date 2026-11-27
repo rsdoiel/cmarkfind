@@ -141,10 +141,15 @@ func TestIndexListSaysWhatIsThere(t *testing.T) {
 	if r.code != 0 || !strings.Contains(r.out, "pages 3") || !strings.Contains(r.out, "generation 1") {
 		t.Errorf("%+v", r)
 	}
-	// bare `index` is the list, of the default directory
+	// bare `indexer` is the list, of the default directory: the fill built it
+	t.Setenv("CMARKFIND_INDEX", "")
 	r = do(t, "-db", db, "indexer")
-	if r.code != 66 {
-		t.Errorf("no default index yet: %+v", r)
+	if r.code != 0 || !strings.Contains(r.out, "pages 3") {
+		t.Errorf("the fill should have built the default index: %+v", r)
+	}
+	t.Setenv("CMARKFIND_INDEX", filepath.Join(t.TempDir(), "nowhere"))
+	if r = do(t, "-db", db, "indexer"); r.code != 66 {
+		t.Errorf("no index in the named directory: %+v", r)
 	}
 	r = do(t, "-db", db, "indexer", "list", "-json", dir)
 	var v map[string]any
@@ -334,5 +339,56 @@ func TestIndexSearchJSONHasTheMarkedExcerpt(t *testing.T) {
 	}
 	if !strings.Contains(v.Hits[0].Excerpt, "<mark>shallow</mark> water") {
 		t.Errorf("excerpt = %q", v.Hits[0].Excerpt)
+	}
+}
+
+// The switch: search reads the index that the fill built, with no indexer
+// build in between, and keeps its output and exit codes.
+func TestSearchAfterAFillNeedsNoIndexerBuild(t *testing.T) {
+	t.Setenv("CMARKFIND_INDEX", "")
+	db := filled(t)
+	r := do(t, "-db", db, "search", "badgers")
+	if r.code != 0 || !strings.Contains(r.out, "https://example.org/b.md") || !strings.Contains(r.out, "[Badgers]") && !strings.Contains(r.out, "[badgers]") {
+		t.Errorf("%+v", r)
+	}
+	if !strings.Contains(r.errOut, "1 hit, searched 3 pages") {
+		t.Errorf("count line: %q", r.errOut)
+	}
+	if r := do(t, "-db", db, "search", "zzzqx"); r.code != 1 {
+		t.Errorf("no match: %+v", r)
+	}
+}
+
+func TestSearchOfAFileUpgradedFromFTS5BuildsTheIndexOnFirstUse(t *testing.T) {
+	t.Setenv("CMARKFIND_INDEX", "")
+	db := filled(t)
+	os.RemoveAll(filepath.Join(filepath.Dir(db), "index"))
+	if r := do(t, "-db", db, "search", "otter"); r.code != 0 || !strings.Contains(r.out, "a.md") {
+		t.Errorf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(db), "index", "manifest.json")); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestSearchQueryOverTheLimitIsUsageExit2InPlainAndJSON(t *testing.T) {
+	db := filled(t)
+	long := strings.Repeat("otter ", 20000)
+	if r := do(t, "-db", db, "search", long); r.code != 2 {
+		t.Errorf("%d: %.200s", r.code, r.errOut)
+	}
+	r := do(t, "-db", db, "search", "-json", long)
+	if r.code != 2 || parseJSON(t, r.out)["class"] != "usage" {
+		t.Errorf("%+v", r)
+	}
+}
+
+func TestAnUnwritableIndexDirectoryIsCantCreateAfterAFill(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "afile")
+	os.WriteFile(file, []byte("x"), 0o644)
+	t.Setenv("CMARKFIND_INDEX", filepath.Join(file, "idx")) // a directory under a file
+	r := do(t, "-db", dbPath(t), "fill", localSite(t))
+	if r.code != 73 {
+		t.Errorf("%+v", r)
 	}
 }

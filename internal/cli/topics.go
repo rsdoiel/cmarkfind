@@ -106,8 +106,11 @@ cmarkfind search [OPTIONS] QUERY...
 
 Search the corpus and print each hit's title, address and tier, and the
 matching text. The count and how many pages were searched go to standard error.
-QUERY is words, "phrases", AND, OR, NOT and word*; see cmarkfind-query(7).
-Text that is not valid query syntax is searched as plain words.
+QUERY is words, "phrases", AND, OR, NOT, -word, word* and title:word; see
+cmarkfind-query(7). Text that is not valid query syntax is searched as plain
+words. The search reads the index that the last fill built beside the corpus
+(cmarkfind-indexer(7)); when it is missing or is not the corpus's own, search
+builds it first, which takes a few seconds on a large corpus.
 
 # OPTIONS
 
@@ -115,9 +118,9 @@ Text that is not valid query syntax is searched as plain words.
 : At most N hits. Default 10.
 
 -index DIR
-: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus. The
-  query is then the Lucene-style language of cmarkfind-query(7); -tag and
-  -pinned do not apply. Exit 66 when DIR holds no index, 65 when it is damaged,
+: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus's
+  own index; the pins, tags and tiers of the corpus do not apply, so -tag and
+  -pinned do not either. Exit 66 when DIR holds no index, 65 when it is damaged,
   2 when the query is too large.
 
 -json
@@ -164,8 +167,10 @@ validate reads every file and checks it against the digest in manifest.json.
 list says what an index holds: pages, chunks, generation and when it was built.
 
 DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
-named index beside the corpus file (so -db moves both). Plain search does not
-read an index; only search -index does.
+named index beside the corpus file (so -db moves both). The corpus builds its own index in that folder after every fill, forget or
+exclude that changed pages, and plain search reads it; a search finding it
+missing, or built by something else, builds it first. indexer build rebuilds it
+by hand, and search -index DIR searches any other index.
 
 # OPTIONS
 
@@ -414,23 +419,29 @@ cmarkfind(1), cmarkfind-tag(7)
 `},
 	{"query", "the search syntax", `# DESCRIPTION
 
-A query is SQLite's FTS5 syntax, searched over each page's title, description
+A query is a Lucene-style string, searched over each page's title, description
 and body.
 
     oberon compiler          both words (AND is implied)
     oberon OR modula         either word
-    oberon NOT pascal        the first and not the second
+    oberon NOT pascal        the first and not the second (-pascal is the same)
     "shallow water"          the words next to each other, in order
     compil*                  words that start with compil
+    title:oberon             the word in the title only (also description:, body:)
+    (oberon OR modula) -tide groups
 
 Case does not matter. A title match counts for more than a description match,
 and a description match for more than one in the body (bm25 with weights 4, 2
 and 1). Hits that rank the same are put in the order bookmarked, read, own, toc
 pages, then by address.
 
-Text that is not valid FTS5 syntax (an unbalanced quote, a stray operator) is
-searched as plain words, so a typo returns hits and not an error. Pages marked
-gone are not searched.
+Text that is not valid query syntax (an unbalanced quote, a stray operator) is
+searched as plain words, so a typo returns hits and not an error; only a query
+over the size limit is refused (exit 2). Words of another search engine's
+syntax that this one does not have, such as NEAR(a b), ^word, a "phrase"~3 or
+fuzzy word~, are read as the words they are made of. Pages marked gone are not
+searched. The text shown with a hit is the 14 words of the page that hold the
+most matches, each match in [brackets].
 
 # EXAMPLES
 
@@ -446,8 +457,9 @@ cmarkfind-search(7), cmarkfind-corpus(7)
 The corpus is one SQLite3 file. It holds, for each page, its address, site,
 title, description, date, body, a hash of its content, the ETag and
 Last-Modified the site sent, when it was fetched and last checked, its tier, and
-when it was found gone. An FTS5 index over title, description and body does the
-searching. Nothing leaves the machine when you search.
+when it was found gone. A search index over title, description and body does the
+searching; it is built from the pages after each fill and kept in a folder
+beside the file (cmarkfind-indexer(7)). Nothing leaves the machine when you search.
 
 The file is named, in this order, by -db FILE, by the CMARKFIND_DB variable, or
 it is cmarkfind/corpus.db in your user data directory. fill creates it; search
@@ -459,7 +471,8 @@ read over the web), read (a page you read in cmarkbrowser) or bookmarked. It
 breaks ties between hits that rank the same.
 
 The file carries a schema version. A file from an older cmarkfind is upgraded in
-place; a file from a newer one is refused (exit 65), and the file is not
+place (schema 5 drops the old FTS5 table; the file keeps its size until you run
+VACUUM on it); a file from a newer one is refused (exit 65), and the file is not
 changed.
 
 Page text comes from sites you do not control. Search results show it as text
