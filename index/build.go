@@ -198,6 +198,7 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 		for _, rp := range postings[w] {
 			ps = append(ps, posting{Delta: uint64(rp.doc - prev), Locations: rp.locs})
 			prev = rp.doc
+			count++ // the posting itself, then one for each position
 			for _, l := range rp.locs {
 				if l >= 0 {
 					count++

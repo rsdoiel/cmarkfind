@@ -242,3 +242,23 @@ func TestOpenMissingAndBadDigest(t *testing.T) {
 		t.Fatalf("missing dir: %v", err)
 	}
 }
+
+// An entry is one posting plus one position (the format's definition of the
+// chunk size): six words that each occur once cost 2 apiece, so a limit of 4
+// cuts after every second word.
+func TestChunkSizeCountsPostingsAndPositions(t *testing.T) {
+	docs := []Doc{{Address: "https://example.org/a.md", Body: "alpha bravo charlie delta echo foxtrot"}}
+	ix := open(t, build(t, docs, 4))
+	if got := ix.Chunks(); got != 3 {
+		t.Errorf("chunks = %d, want 3 (two words of cost 2 each per chunk)", got)
+	}
+	// A word in two documents, twice in one: 2 postings + 3 positions = 5.
+	docs = []Doc{
+		{Address: "https://example.org/a.md", Body: "kilo kilo"},
+		{Address: "https://example.org/b.md", Body: "kilo lima"},
+	}
+	// kilo costs 4 (reaches the limit of 4), so lima starts a second chunk.
+	if got := open(t, build(t, docs, 4)).Chunks(); got != 2 {
+		t.Errorf("chunks = %d, want 2", got)
+	}
+}
