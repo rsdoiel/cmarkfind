@@ -1,0 +1,135 @@
+; cmarkfind index format, version 1 (DRAFT: not implemented; not frozen)
+;
+; CDDL (RFC 8610) for the files of one index: a manifest and the files it
+; names. The manifest is JSON (RFC 8259) so a person can read it; every other
+; file is deterministic CBOR (RFC 8949 section 4.2), compressed as the manifest
+; says. A reader needs this file and the paragraphs below, nothing else.
+;
+; LAYOUT. An index is a directory (or a site folder) holding:
+;
+;   manifest.json                  the only file with a fixed name
+;   w/<digest>.cbor[.gz|.br|.zst]  word chunks   (name = lower-case hex digest)
+;   d/<digest>.cbor[.gz|.br|.zst]  document tables
+;   f/<digest>.cbor[.gz|.br|.zst]  fragments, one per page
+;   x/<digest>.cbor[.gz|.br|.zst]  filter files (reserved; empty in version 1)
+;
+; Every address in a manifest is a path relative to the manifest, built as
+; above from a digest. A reader refuses an absolute address, a scheme, "..",
+; or a path that is not one of these forms.
+;
+; DIGEST. The digest of a file is the SHA-256 of its *uncompressed* bytes, so
+; the same index has the same digests whatever compressor wrote it. A reader
+; decompresses with a limit (the size in the manifest, never more than
+; max-file-size below), then checks the digest, then decodes. The compressed
+; bytes are not digested: HTTPS covers transport, the digest guards against
+; corruption and swapped or stale files, not against a spoofed site.
+;
+; VERSION RULE. A version-1 reader (a) ignores unknown trailing elements of an
+; array and unknown keys of a map unless the key is in "required" (below);
+; (b) refuses a manifest whose "format" or "analyzer" it does not know, whose
+; "required" lists a feature it does not know, or whose "generation" is lower
+; than the one it already holds for that index; (c) rejects duplicate map keys
+; and indefinite-length CBOR items. A change that old readers must not ignore
+; is a new "format" (cmarkfind/2).
+;
+; LIMITS. Readers cap: manifest 4 MiB, one decompressed file "max-file-size",
+; array and map sizes in a file at its entry count, nesting depth 8, and the
+; number of files a manifest names ("max-files"). The numbers below are the
+; defaults of this draft.
+
+max-file-size = 8388608      ; 8 MiB decompressed
+max-files = 1000000
+
+; Named key types: a map may hold any further text (or unsigned) keys.
+text-key = tstr
+uint-key = uint
+
+; ---------------------------------------------------------------- manifest
+
+manifest = {
+  format: "cmarkfind/1",
+  analyzer: "unicode-word-v1",     ; how words are made (see the tokenizer note)
+  generation: uint,                ; grows with every build of the same index
+  built: tstr,                     ; RFC 3339 UTC time of the build
+  ? required: [* tstr],            ; features a reader must know to use this index
+  compression: compression,        ; applies to every file unless a file says otherwise
+  documents: documents,
+  chunks: [+ chunk],               ; sorted, covering every word, no overlap
+  ? filters: {* text-key => file},     ; reserved for facets
+  ? extensions: {* text-key => any},   ; reverse-domain names; ignored when unknown
+  * text-key => any                ; unknown keys are ignored
+}
+
+compression = "none" / "gzip" / "br" / "zstd"
+
+; The documents of the index, numbered from 0 in the order of "ranges".
+documents = {
+  count: uint,
+  words: uint,                     ; total of every document's word_count (average length = words / count)
+  ranges: [+ [first: uint, last: uint, file]],
+  * text-key => any
+}
+
+; A word chunk covers the words from "from" to "to" inclusive, in byte order of
+; their UTF-8 (the order of Go's string comparison). Chunks are cut by a count
+; of entries when the index is built; the count is not part of the format.
+chunk = [from: tstr, to: tstr, file]
+
+; A file: digest of the uncompressed bytes (lower-case hex, 64 characters) and
+; its uncompressed size in bytes. The path follows from the digest.
+file = [digest: tstr .size 64, size: uint .le max-file-size]
+
+; ------------------------------------------------------------- word chunks
+
+; Header [version, analyzer, generation, entries]. A reader rejects a file
+; whose three header values differ from the manifest's.
+word-chunk = [1, "unicode-word-v1", generation: uint, entries: [* entry]]
+
+entry = [word: tstr, postings: [+ posting]]
+
+; A posting is one document's use of the word.
+;   delta     document number minus the previous posting's (the first: the number)
+;   locations word positions in the document's word list, each as the difference from the
+;             previous one (the first: the position); a negative integer -w is a weight
+;             marker: the positions after it have weight w (default weight 1)
+;   meta      reserved (version 1 writers omit it): positions inside a named field,
+;             [field, delta positions]; written as a second form because a trailing
+;             optional array element is not read the same way by every tool
+posting = [delta: uint, locations: [* int]]
+        / [delta: uint, locations: [* int], meta: [* [field: uint, [* uint]]]]
+
+; --------------------------------------------------------- document tables
+
+; One entry per document number of the range, in order: word_count and the
+; digest of the document's fragment file (32 bytes, not hex).
+document-table = [1, "unicode-word-v1", generation: uint, rows: [* document-row]]
+document-row = [word_count: uint, fragment: bstr .size 32]
+
+; --------------------------------------------------------------- fragments
+
+; The text of a page as the tokenizer sees it: one surface word per word of the
+; page, joined by single spaces, so the whitespace split of "text" has exactly
+; word_count words and a position in a posting indexes one of them. Title,
+; description and body words are in that order and "segments" says how many of
+; each there are.
+fragment = {
+  0: tstr,                         ; address: the page's published address
+  1: tstr,                         ; text
+  2: uint,                         ; word_count
+  ? 3: {* text-key => field-value}, ; fields from front matter, as strings
+  ? 4: [* anchor],                 ; headings
+  ? 5: [* segment],                ; [weight, word count] pieces of "text"
+  * uint-key => any
+}
+
+field-value = tstr / [* tstr]
+
+; A heading: its slug (markdownweb's rule, so a link to it resolves), its heading text,
+; the position of its first word, its level (1 to 6).
+anchor = [slug: tstr, heading: tstr, position: uint, level: 1..6]
+segment = [weight: uint, words: uint]
+
+; ------------------------------------------------------------ filter files
+
+; Reserved. Version 1 writers emit none and readers ignore "filters".
+filter-file = [1, "unicode-word-v1", generation: uint, name: tstr, values: {* text-key => [* uint]}]
