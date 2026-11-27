@@ -274,7 +274,32 @@ func writeFile(dir, kind, compression string, raw []byte) (fileRef, error) {
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return ref, err
 	}
-	return ref, os.WriteFile(file, data, 0o644)
+	return ref, replaceFile(file, data)
+}
+
+// replaceFile writes data to a temporary file beside name and renames it into
+// place, so a reader that has the old file open or opens it now sees all of it:
+// a rebuild rewrites a file whose content did not change under the same name.
+func replaceFile(name string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(name), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tn := tmp.Name()
+	_, err = tmp.Write(data)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Chmod(tn, 0o644)
+	}
+	if err == nil {
+		err = os.Rename(tn, name)
+	}
+	if err != nil {
+		os.Remove(tn)
+	}
+	return err
 }
 
 // readFile reads the file kind/digest, decompresses with a limit, and checks

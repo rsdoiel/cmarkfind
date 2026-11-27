@@ -219,7 +219,14 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "manifest.json"), append(out, '\n'), 0o644)
+	return replaceManifest(dir, append(out, '\n'))
+}
+
+// replaceManifest replaces manifest.json whole: the bytes go to a temporary file
+// in the same directory, then it is renamed over the manifest, so a reader
+// sees the old manifest or the new one and never half of either.
+func replaceManifest(dir string, b []byte) error {
+	return replaceFile(filepath.Join(dir, "manifest.json"), b)
 }
 
 // encodeLocations delta-codes positions; a negative integer -w switches the

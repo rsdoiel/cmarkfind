@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rsdoiel/cmarkfind/index"
 )
@@ -208,6 +209,20 @@ func TestIndexRebuildRaisesGenerationAndPrunes(t *testing.T) {
 	}
 	if r := do(t, "-db", db, "indexer", "validate", dir); r.code != 0 {
 		t.Errorf("verify after rebuild: %+v", r)
+	}
+	// the previous generation's files stay for a while, for a search still reading them
+	if after := count(); after <= before {
+		t.Errorf("the old files were pruned at once: %d files before, %d after", before, after)
+	}
+	old := time.Now().Add(-time.Hour)
+	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			os.Chtimes(p, old, old)
+		}
+		return nil
+	})
+	if r := do(t, "-db", db, "indexer", "build", dir); r.code != 0 {
+		t.Fatalf("%+v", r)
 	}
 	if after := count(); after > before {
 		t.Errorf("old files were left: %d files before, %d after", before, after)

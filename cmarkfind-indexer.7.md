@@ -27,7 +27,8 @@ An index is a folder of compressed files, made from the corpus, that a program
 can search without the corpus (and, later, over HTTP). build writes one from
 every page the corpus holds that is not gone and not under an excluded prefix.
 Building again replaces it: the generation number grows by one and files the
-new manifest no longer names are removed. The same pages always give the same
+new manifest no longer names are removed once they are ten minutes old, so
+a search that began before the rebuild can finish. The same pages always give the same
 files.
 
 validate reads every file and checks it against the digest in manifest.json.
