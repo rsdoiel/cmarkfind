@@ -14,6 +14,7 @@ import (
  *   Site (string)    — what the page was filled from
  *   Tier (string)    — how it entered the corpus (own, read, toc, ...)
  *   Snippet (string) — the matching text, matches in [brackets]; empty in a listing
+ *   Anchor (string)  — slug of the heading the first match is under (address#Anchor); empty before the first heading, under a level 1 heading (the title) and in a listing
  *   Pinned (bool)    — the person pinned the page
  *   Tags ([]string)  — the person's tags on the page
  *
@@ -21,9 +22,9 @@ import (
  *   fmt.Println(h.Title, h.Address, h.Snippet)
  */
 type Hit struct {
-	Address, Title, Site, Tier, Snippet string
-	Pinned                              bool
-	Tags                                []string
+	Address, Title, Site, Tier, Snippet, Anchor string
+	Pinned                                      bool
+	Tags                                        []string
 }
 
 /** Results is the answer to a search.

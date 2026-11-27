@@ -264,3 +264,17 @@ func rankSite2() map[string]*string {
 		"other.md":  s("# Badgers\n\nBadgers dig setts.\n"),
 	}
 }
+
+func TestAHitCarriesTheAnchorOfTheHeadingItsMatchIsUnder(t *testing.T) {
+	db, _ := open(t)
+	fill(t, db, site(t, map[string]*string{
+		"w.md": s("# Waterbirds\n\nIntro words.\n\n## Shallow water\n\nThe crane wades here.\n\n## Other\n\nNothing.\n"),
+	}))
+	h := search(t, db, "crane").Hits[0]
+	if h.Anchor != "shallow-water" {
+		t.Errorf("anchor %q", h.Anchor)
+	}
+	if h := search(t, db, "intro").Hits[0]; h.Anchor != "" { // under the title heading: no fragment
+		t.Errorf("anchor %q", h.Anchor)
+	}
+}

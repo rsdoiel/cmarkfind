@@ -17,8 +17,12 @@ cmarkfind search [OPTIONS] QUERY...
 
 # DESCRIPTION
 
-Search the corpus and print each hit's title, address and tier, and the
-matching text. The count and how many pages were searched go to standard error.
+Search the corpus and print the hits as a Markdown list: each is a link
+(title as the text, address as the target, with #heading added when the match is
+under a heading below the page's title), then a line with its tier, whether
+it is pinned and its tags, then the matching text with the matched words in
+**bold**. The output can be saved as a .md file or read in cmarkbrowser. -json
+has the same facts for programs. The count and how many pages were searched go to standard error.
 QUERY is words, "phrases", AND, OR, NOT, -word, word* and title:word; see
 cmarkfind-query(7). Text that is not valid query syntax is searched as plain
 words. The search reads the index that the last fill built beside the corpus
@@ -37,7 +41,8 @@ builds it first, which takes a few seconds on a large corpus.
   2 when the query is too large.
 
 -json
-: Write {"hits": [...], "searched": N}. With -index each hit also has "excerpt"
+: Write {"hits": [...], "searched": N}; each hit has "anchor", the heading slug
+  (empty when there is none). With -index each hit also has "excerpt"
   (the best 30 words, HTML-escaped, each matched word in <mark>) and, when the
   excerpt sits under a heading, "anchor" (the heading's slug, for address#anchor).
 

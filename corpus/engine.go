@@ -279,11 +279,11 @@ func (d *DB) searchIndex(ctx context.Context, query, frag string, fargs []any, l
 	hits := make([]Hit, 0, len(all))
 	for _, h := range all {
 		m := meta[h.Address]
-		snip, err := snippet(ix, node, h.Doc)
+		snip, anchor, err := snippet(ix, node, h.Doc)
 		if err != nil {
 			return nil, err
 		}
-		hits = append(hits, Hit{Address: h.Address, Title: m.title, Site: m.site, Tier: m.tier, Snippet: snip, Pinned: m.pinned})
+		hits = append(hits, Hit{Address: h.Address, Title: m.title, Site: m.site, Tier: m.tier, Snippet: snip, Anchor: anchor, Pinned: m.pinned})
 	}
 	return hits, nil
 }
@@ -292,15 +292,16 @@ func (d *DB) searchIndex(ctx context.Context, query, frag string, fargs []any, l
 const snippetWords = 14
 
 // snippet is the best window of the page for the query, each hit word in
-// [brackets], an ellipsis where the page goes on.
-func snippet(ix *index.Index, n *index.Node, doc int) (string, error) {
+// [brackets], an ellipsis where the page goes on, and the slug of the heading
+// the first match is under (none for a level 1 heading, the page's title).
+func snippet(ix *index.Index, n *index.Node, doc int) (string, string, error) {
 	f, err := ix.Fragment(doc)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	marks, err := ix.Marks(n, doc)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	ex := index.MakeExcerpt(f, marks, snippetWords)
 	hit := map[int]bool{}
@@ -325,5 +326,11 @@ func snippet(ix *index.Index, n *index.Node, doc int) (string, error) {
 	if ex.Trailing {
 		b.WriteString(" …")
 	}
-	return b.String(), nil
+	anchor := ex.Anchor
+	for _, a := range f.Anchors {
+		if a.Slug == anchor && a.Level == 1 {
+			anchor = "" // the page's own title: the address already says it
+		}
+	}
+	return b.String(), anchor, nil
 }

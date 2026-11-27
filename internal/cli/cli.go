@@ -401,7 +401,7 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 			if ts == nil {
 				ts = []string{}
 			}
-			hits = append(hits, map[string]any{"address": h.Address, "title": h.Title, "site": h.Site, "tier": h.Tier, "snippet": h.Snippet, "pinned": h.Pinned, "tags": ts})
+			hits = append(hits, map[string]any{"address": h.Address, "title": h.Title, "site": h.Site, "tier": h.Tier, "snippet": h.Snippet, "anchor": h.Anchor, "pinned": h.Pinned, "tags": ts})
 		}
 		m := map[string]any{"hits": hits, "searched": res.Searched, "pending": res.Pending}
 		if filtered {
@@ -411,17 +411,14 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 		fmt.Fprintf(o.stdout, "%s\n", b)
 	} else {
 		for _, h := range res.Hits {
-			marks := ""
+			detail := h.Tier
 			if h.Pinned {
-				marks += "  pinned"
+				detail += ", pinned"
 			}
 			if len(h.Tags) > 0 {
-				marks += "  tags: " + strings.Join(h.Tags, " ")
+				detail += ", tags: " + mdText(strings.Join(h.Tags, " "))
 			}
-			fmt.Fprintf(o.stdout, "%s\n  %s  [%s]%s\n", h.Title, h.Address, h.Tier, marks)
-			if h.Snippet != "" {
-				fmt.Fprintf(o.stdout, "  %s\n", strings.Join(strings.Fields(h.Snippet), " "))
-			}
+			o.writeHit(h.Title, h.Address, h.Anchor, mdText(detail), mdSnippet(h.Snippet))
 		}
 		n := len(res.Hits)
 		more := ""

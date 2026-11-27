@@ -187,7 +187,7 @@ func (o *out) searchIndex(dir string, query string, limit int) error {
 		fmt.Fprintf(o.stdout, "%s\n", b)
 	} else {
 		for _, r := range rows {
-			fmt.Fprintf(o.stdout, "%s\n  %s\n", r.title, r.address)
+			text := ""
 			if r.ex.Text != "" {
 				lead, trail := "", ""
 				if r.ex.Leading {
@@ -196,8 +196,9 @@ func (o *out) searchIndex(dir string, query string, limit int) error {
 				if r.ex.Trailing {
 					trail = " …"
 				}
-				fmt.Fprintf(o.stdout, "  %s%s%s\n", lead, r.ex.Text, trail)
+				text = mdSnippet(lead + r.ex.Text + trail)
 			}
+			o.writeHit(r.title, r.address, r.ex.Anchor, "", text)
 		}
 		fmt.Fprintf(o.stderr, "%s: %d %s, searched %d pages\n", appName, len(rows), plural(len(rows), "hit", "hits"), ix.Count())
 	}
