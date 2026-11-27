@@ -162,3 +162,43 @@ func TestReadersNeverSeeAHalfBuiltIndexWhileItIsRebuilt(t *testing.T) {
 		}
 	}
 }
+
+// A build that died between creating a temporary file and renaming it leaves
+// `.tmp-*` behind; Prune clears those once they are old, in the root and in w,
+// d and f, and never touches a recent one (a build may be writing it now).
+func TestPruneClearsOldTemporaryFilesAndKeepsRecentOnes(t *testing.T) {
+	dir := t.TempDir()
+	if err := Build(dir, []Doc{{Address: "https://e.org/a", Title: "A", Body: "otter"}}, BuildOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	old, recent := []string{".tmp-old1", "w/.tmp-old2", "d/.tmp-old3", "f/.tmp-old4"}, []string{".tmp-new1", "w/.tmp-new2"}
+	for _, n := range append(append([]string{}, old...), recent...) {
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(n)), []byte("partial"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stray := filepath.Join(dir, "notes.txt")
+	os.WriteFile(stray, []byte("mine"), 0o644)
+	hour := time.Now().Add(-time.Hour)
+	for _, n := range old {
+		os.Chtimes(filepath.Join(dir, filepath.FromSlash(n)), hour, hour)
+	}
+	os.Chtimes(stray, hour, hour)
+	n, err := Prune(dir)
+	if err != nil || n != len(old) {
+		t.Fatalf("pruned %d (%v), want %d", n, err, len(old))
+	}
+	for _, f := range old {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(f))); err == nil {
+			t.Errorf("%s was left", f)
+		}
+	}
+	for _, f := range append(recent, "notes.txt") {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(f))); err != nil {
+			t.Errorf("%s was removed", f)
+		}
+	}
+	if err := Verify(dir); err != nil {
+		t.Error(err)
+	}
+}

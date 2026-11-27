@@ -2,6 +2,8 @@ package index
 
 import (
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -18,6 +20,10 @@ import (
  *   fmt.Println(ix.Built())
  */
 func (ix *Index) Built() string { return ix.m.Built }
+
+// tempPrefix starts the name of a file being written (see replaceFile); one
+// left behind by a build that died is removed like any other leftover.
+const tempPrefix = ".tmp-"
 
 // DefaultPruneGrace is how long Prune leaves a file the manifest no longer
 // names: a search that opened the previous generation reads its files lazily,
@@ -77,14 +83,21 @@ func PruneOlderThan(dir string, grace time.Duration) (int, error) {
 		live[compressedName("f", hex.EncodeToString(r.Fragment), ix.m.Compression)] = true
 	}
 	removed := 0
-	for _, kind := range []string{"w", "d", "f"} {
+	for _, kind := range []string{".", "w", "d", "f"} {
 		ents, err := os.ReadDir(filepath.Join(dir, kind))
 		if err != nil {
 			continue
 		}
 		for _, e := range ents {
 			name := path.Join(kind, e.Name())
-			if e.IsDir() || live[name] || !(strings.HasSuffix(name, ".cbor") || strings.HasSuffix(name, ".cbor.gz")) {
+			if kind == "." {
+				if !strings.HasPrefix(e.Name(), tempPrefix) {
+					continue // the root holds the manifest and what is not ours
+				}
+				name = e.Name()
+			}
+			temp := strings.HasPrefix(e.Name(), tempPrefix)
+			if e.IsDir() || (!temp && (live[name] || !(strings.HasSuffix(name, ".cbor") || strings.HasSuffix(name, ".cbor.gz")))) {
 				continue
 			}
 			if grace > 0 {
@@ -92,7 +105,11 @@ func PruneOlderThan(dir string, grace time.Duration) (int, error) {
 					continue
 				}
 			}
-			if err := os.Remove(filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+			err := os.Remove(filepath.Join(dir, filepath.FromSlash(name)))
+			if errors.Is(err, fs.ErrNotExist) {
+				continue // another prune got there first
+			}
+			if err != nil {
 				return removed, err
 			}
 			removed++

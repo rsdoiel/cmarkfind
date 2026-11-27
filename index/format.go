@@ -281,7 +281,7 @@ func writeFile(dir, kind, compression string, raw []byte) (fileRef, error) {
 // place, so a reader that has the old file open or opens it now sees all of it:
 // a rebuild rewrites a file whose content did not change under the same name.
 func replaceFile(name string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(name), ".tmp-*")
+	tmp, err := os.CreateTemp(filepath.Dir(name), tempPrefix+"*")
 	if err != nil {
 		return err
 	}

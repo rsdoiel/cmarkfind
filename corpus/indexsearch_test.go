@@ -278,3 +278,34 @@ func TestAHitCarriesTheAnchorOfTheHeadingItsMatchIsUnder(t *testing.T) {
 		t.Errorf("anchor %q", h.Anchor)
 	}
 }
+
+// A fill and a search (or two programs) may both find the index missing and
+// build it at once. Neither may fail, and the result must be a sound index.
+func TestTwoBuildsAtOnceLeaveASoundIndexAndNeitherFails(t *testing.T) {
+	t.Setenv("CMARKFIND_INDEX", "")
+	db, _ := open(t)
+	fill(t, db, site(t, threePages))
+	ctx := context.Background()
+	errs := make(chan error, 8)
+	for i := 0; i < 4; i++ {
+		go func() {
+			_, err := db.BuildIndex(ctx, db.IndexDir(), 0)
+			errs <- err
+		}()
+		go func() {
+			_, err := db.Search(ctx, "otter", 10)
+			errs <- err
+		}()
+	}
+	for i := 0; i < 8; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent build or search: %v", err)
+		}
+	}
+	if err := index.Verify(db.IndexDir()); err != nil {
+		t.Errorf("index after concurrent builds: %v", err)
+	}
+	if n := len(search(t, db, "otter").Hits); n != 1 {
+		t.Errorf("%d hits", n)
+	}
+}
