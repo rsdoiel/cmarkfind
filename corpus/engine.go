@@ -2,9 +2,12 @@ package corpus
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,7 +20,75 @@ import (
 // ErrIndex says the index could not be written (exit class cant_create, 73).
 var ErrIndex = errors.New("corpus: cannot write the index")
 
-const metaIndexGeneration = "index_generation"
+// ErrIndexShared says the index folder belongs to another corpus: two corpora
+// given one CMARKFIND_INDEX would rebuild over each other on every search (exit
+// class config, 78).
+var ErrIndexShared = errors.New("corpus: the index folder belongs to another corpus")
+
+const (
+	metaIndexGeneration = "index_generation"
+	metaCorpusID        = "corpus_id"
+	ownerFile           = ".cmarkfind-owner"
+)
+
+// corpusID is this corpus file's identity, made on first use and kept in meta
+// (a copy of the file is the same corpus).
+func (d *DB) corpusID(ctx context.Context) (string, error) {
+	var id string
+	err := d.sql.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaCorpusID).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return "", classify(err)
+	}
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	if _, err := d.sql.ExecContext(ctx, `INSERT OR IGNORE INTO meta(key, value) VALUES (?, ?)`, metaCorpusID, hex.EncodeToString(b[:])); err != nil {
+		return "", classify(err)
+	}
+	err = d.sql.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaCorpusID).Scan(&id)
+	return id, classify(err)
+}
+
+// claim makes the corpus's own index folder this corpus's: a folder with no
+// owner file is taken (an index from before folders had owners, or an empty
+// one); one another corpus owns is refused.
+func (d *DB) claim(ctx context.Context) error {
+	id, err := d.corpusID(ctx)
+	if err != nil {
+		return err
+	}
+	dir := d.IndexDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("%w: %w", ErrIndex, err)
+	}
+	file := filepath.Join(dir, ownerFile)
+	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err == nil {
+		_, err = f.WriteString(id + "\n")
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrIndex, err)
+		}
+		return nil
+	}
+	if !errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("%w: %w", ErrIndex, err)
+	}
+	have, err := os.ReadFile(file)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrIndex, err)
+	}
+	if strings.TrimSpace(string(have)) != id {
+		return fmt.Errorf("%w: %s; give this corpus a folder of its own with CMARKFIND_INDEX", ErrIndexShared, dir)
+	}
+	return nil
+}
 
 /** DefaultIndexDir returns where the index of a corpus lives when nothing
  * else says: the CMARKFIND_INDEX variable, else an index folder beside the
@@ -53,8 +124,10 @@ func (d *DB) IndexDir() string { return DefaultIndexDir(d.path) }
 /** BuildIndex writes the index of the stored pages into dir: every page not
  * gone and not under an excluded prefix. The generation goes up by one from
  * the index already there, and files the old manifest named are pruned. When
- * dir is the corpus's own IndexDir the generation is recorded, so a later
- * search can tell this index is the one built from this corpus.
+ * dir is the corpus's own IndexDir the folder is claimed for this corpus (an
+ * owner file; ErrIndexShared when another corpus owns it) and the generation is
+ * recorded, so a later search can tell this index is the one built from this
+ * corpus.
  *
  * Parameters:
  *   ctx (context.Context) — cancels the read of the pages
@@ -64,12 +137,19 @@ func (d *DB) IndexDir() string { return DefaultIndexDir(d.path) }
  * Returns:
  *   *index.Index — the opened result
  *   error        — database errors; index.ErrData for a bad page set;
- *                  ErrIndex when the files cannot be written
+ *                  ErrIndex when the files cannot be written; ErrIndexShared
+ *                  when another corpus owns the folder
  *
  * Example:
  *   ix, err := db.BuildIndex(ctx, db.IndexDir(), 0)
  */
 func (d *DB) BuildIndex(ctx context.Context, dir string, chunk int) (*index.Index, error) {
+	own := filepath.Clean(dir) == filepath.Clean(d.IndexDir())
+	if own {
+		if err := d.claim(ctx); err != nil {
+			return nil, err
+		}
+	}
 	pages, err := d.IndexPages(ctx)
 	if err != nil {
 		return nil, err
@@ -95,7 +175,7 @@ func (d *DB) BuildIndex(ctx context.Context, dir string, chunk int) (*index.Inde
 	if err != nil {
 		return nil, err
 	}
-	if dir == d.IndexDir() {
+	if own {
 		_, err = d.sql.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 			metaIndexGeneration, strconv.FormatUint(ix.Generation(), 10))
 		if err != nil {
@@ -131,6 +211,9 @@ func (d *DB) afterChange(ctx context.Context, changed bool, err error) error {
 // missing or is not the one this corpus last built (another build or another
 // corpus wrote the directory).
 func (d *DB) current(ctx context.Context) (*index.Index, error) {
+	if err := d.claim(ctx); err != nil {
+		return nil, err
+	}
 	dir := d.IndexDir()
 	var rec string
 	err := d.sql.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaIndexGeneration).Scan(&rec)

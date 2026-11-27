@@ -136,6 +136,10 @@ help [TOPIC]
 77
 : The system refused access.
 
+78
+: The index folder belongs to another corpus; give each corpus its own
+  (CMARKFIND_INDEX).
+
 70
 : A bug.
 

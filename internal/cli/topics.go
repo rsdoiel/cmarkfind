@@ -178,6 +178,13 @@ exclude that changed pages, and plain search reads it; a search finding it
 missing, or built by something else, builds it first. indexer build rebuilds it
 by hand, and search -index DIR searches any other index.
 
+The folder is the corpus's own: the first corpus to build into it writes a small
+file, .cmarkfind-owner, naming itself, and a second corpus pointed at the same
+folder is refused (exit 78) instead of rebuilding over the first on every
+search. An index with no owner file (built by an older cmarkfind) goes to the
+first corpus that builds it. indexer build DIR into any other folder does not
+claim it.
+
 # OPTIONS
 
 -chunk N
@@ -528,6 +535,10 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 
 77
 : The system refused access.
+
+78
+: The index folder (CMARKFIND_INDEX, or the folder beside the corpus) belongs to
+  another corpus. Give each corpus a folder of its own.
 
 # SEE ALSO
 

@@ -52,6 +52,10 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 77
 : The system refused access.
 
+78
+: The index folder (CMARKFIND_INDEX, or the folder beside the corpus) belongs to
+  another corpus. Give each corpus a folder of its own.
+
 # SEE ALSO
 
 cmarkfind(1), cmarkfind-corpus(7)

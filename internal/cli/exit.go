@@ -25,6 +25,7 @@ const (
 	ExitCantCreate   = 73
 	ExitTempFail     = 75
 	ExitNoPermission = 77
+	ExitConfig       = 78
 )
 
 // ErrUsage marks a bad command line; wrap it with %w to exit 2.
@@ -46,7 +47,7 @@ var ErrCantCreate = errors.New("cannot create")
  * Returns:
  *   int    — the exit code
  *   string — the class (ok, negative, usage, data, no_input, unavailable,
- *            internal, cant_create, temp_fail, no_permission)
+ *            internal, cant_create, temp_fail, no_permission, config)
  *
  * Example:
  *   code, class := cli.Classify(fmt.Errorf("%w: no query", cli.ErrUsage)) // 2, "usage"
@@ -57,6 +58,8 @@ func Classify(err error) (int, string) {
 		return ExitOK, "ok"
 	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag), index.IsQueryLimit(err):
 		return ExitUsage, "usage"
+	case errors.Is(err, corpus.ErrIndexShared):
+		return ExitConfig, "config"
 	case errors.Is(err, fs.ErrPermission):
 		return ExitNoPermission, "no_permission"
 	case errors.Is(err, ErrCantCreate), errors.Is(err, corpus.ErrIndex):

@@ -3,12 +3,14 @@ package corpus
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/rsdoiel/cmarkfind/index"
+	"github.com/rsdoiel/markdownweb/toc"
 )
 
 // Tests for the switch from FTS5 to the partitioned index: written before the
@@ -309,3 +311,98 @@ func TestTwoBuildsAtOnceLeaveASoundIndexAndNeitherFails(t *testing.T) {
 		t.Errorf("%d hits", n)
 	}
 }
+
+// ---- one index folder, one corpus ----
+
+// openAt opens a second corpus file.
+func openAt(t *testing.T) *DB {
+	t.Helper()
+	db, err := Open(filepath.Join(t.TempDir(), "other.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func generationOf(t *testing.T, dir string) uint64 {
+	t.Helper()
+	ix, err := index.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ix.Generation()
+}
+
+func TestASecondCorpusIsRefusedAnIndexFolderTheFirstOwnsAndTheFirstIsLeftAlone(t *testing.T) {
+	shared := filepath.Join(t.TempDir(), "shared")
+	t.Setenv("CMARKFIND_INDEX", shared)
+	ctx := context.Background()
+	one, _ := open(t)
+	fill(t, one, site(t, threePages))
+	gen := generationOf(t, shared)
+
+	two := openAt(t)
+	_, err := two.FillLocal(ctx, site(t, map[string]*string{"z.md": s("# Zebras\n\nstripes\n")}), tocLimits())
+	if !errors.Is(err, ErrIndexShared) {
+		t.Fatalf("fill into an owned folder: %v", err)
+	}
+	if _, err := two.Search(ctx, "zebras", 10); !errors.Is(err, ErrIndexShared) {
+		t.Errorf("search: %v", err)
+	}
+	for i := 0; i < 3; i++ { // the first corpus keeps its index, with no rebuilding back and forth
+		if n := len(search(t, one, "otter").Hits); n != 1 {
+			t.Fatalf("the owner lost its index: %d hits", n)
+		}
+	}
+	if g := generationOf(t, shared); g != gen {
+		t.Errorf("generation %d, was %d: the index was rebuilt", g, gen)
+	}
+}
+
+func TestAnIndexFolderWithNoOwnerIsAdoptedByTheFirstCorpusThatBuildsIt(t *testing.T) {
+	shared := filepath.Join(t.TempDir(), "old")
+	t.Setenv("CMARKFIND_INDEX", shared)
+	// an index from before folders had owners
+	if err := index.Build(shared, []index.Doc{{Address: "https://x.example/a.md", Title: "A", Body: "old"}}, index.BuildOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	db, _ := open(t)
+	fill(t, db, site(t, threePages))
+	if n := len(search(t, db, "otter").Hits); n != 1 {
+		t.Errorf("%d hits", n)
+	}
+	two := openAt(t)
+	if _, err := two.Search(context.Background(), "otter", 10); !errors.Is(err, ErrIndexShared) {
+		t.Errorf("the adopted folder should now be owned: %v", err)
+	}
+}
+
+func TestACopiedCorpusFileKeepsItsIndexFolder(t *testing.T) {
+	t.Setenv("CMARKFIND_INDEX", "")
+	db, path := open(t)
+	fill(t, db, site(t, threePages))
+	db.Close()
+	again, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	if n := len(search(t, again, "otter").Hits); n != 1 {
+		t.Errorf("%d hits after reopening", n)
+	}
+}
+
+func TestExplicitBuildsIntoAnotherFolderDoNotClaimOrCheckOwnership(t *testing.T) {
+	shared := filepath.Join(t.TempDir(), "shared")
+	t.Setenv("CMARKFIND_INDEX", shared)
+	one, _ := open(t)
+	fill(t, one, site(t, threePages))
+	two := openAt(t)
+	elsewhere := filepath.Join(t.TempDir(), "mine")
+	if _, err := two.BuildIndex(context.Background(), elsewhere, 0); err != nil {
+		t.Errorf("a build into a folder that is not the corpus's own: %v", err)
+	}
+}
+
+func tocLimits() toc.Limits { return toc.Limits{} }

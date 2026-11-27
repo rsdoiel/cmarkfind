@@ -12,6 +12,7 @@
 - Query differences from FTS5: `-word` and `title:word` are in; NEAR(), `^word`, column sets `{a b}:` and a prefix on a phrase are not (read as words). Snippets are the 14 words with the most matches, not FTS5's. Pins, tags and tier ties work as before.
 - `search` prints hits as a Markdown list of working links (`- [Title](address)`, then tier, pins and tags, then the snippet with matches in bold). The link ends in `#heading` when the match is under a heading below the page's title (JSON hits gain `anchor`). Titles and addresses are escaped, and control characters are dropped. `-json` is unchanged.
 - A rebuild no longer breaks a search running at the same time: files are written to a temporary name and renamed, `manifest.json` last, and files the new manifest drops, and temporary files a dead build left, are pruned only when ten minutes old. Two builds at once (a fill and a search) are safe.
+- An index folder has one owner: the first corpus to build into it writes `.cmarkfind-owner`, and a second corpus pointed at the same `CMARKFIND_INDEX` is refused with exit 78 (`config`) instead of rebuilding over the first on every search. A folder with no owner file is adopted by the first corpus that builds it.
 - A query over the size limit exits 2; an index that cannot be written exits 73.
 
 ## v0.0.1, 2026-11-26

@@ -407,3 +407,20 @@ func TestAnUnwritableIndexDirectoryIsCantCreateAfterAFill(t *testing.T) {
 		t.Errorf("%+v", r)
 	}
 }
+
+// A folder named by CMARKFIND_INDEX that another corpus owns is a setting that
+// is wrong, not a bug and not a missing file: exit 78 (config).
+func TestAnIndexFolderAnotherCorpusOwnsIsExit78InPlainAndJSON(t *testing.T) {
+	shared := filepath.Join(t.TempDir(), "shared")
+	t.Setenv("CMARKFIND_INDEX", shared)
+	filled(t) // the first corpus builds and owns it
+	other := dbPath(t)
+	r := do(t, "-db", other, "fill", localSite(t))
+	if r.code != 78 || !strings.Contains(r.errOut, "another corpus") || !strings.Contains(r.errOut, shared) {
+		t.Errorf("%+v", r)
+	}
+	r = do(t, "-db", other, "search", "-json", "otter")
+	if r.code != 78 || parseJSON(t, r.out)["class"] != "config" {
+		t.Errorf("%+v", r)
+	}
+}
