@@ -108,7 +108,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return o.fail(fmt.Errorf("%w: unknown option %s", ErrUsage, args[0]))
 	}
 	if len(args) == 0 {
-		return o.fail(fmt.Errorf("%w: no verb (fill, search, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage))
+		return o.fail(fmt.Errorf("%w: no verb (fill, search, indexer, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage))
 	}
 	if dbFile == "" {
 		dbFile = DefaultDB()
@@ -141,6 +141,10 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return o.fail(o.fill(ctx, dbFile, rest))
 	case "search":
 		return o.fail(o.search(ctx, dbFile, rest))
+	case "indexer":
+		return o.fail(o.indexer(ctx, dbFile, rest))
+	case "index":
+		return o.fail(fmt.Errorf("%w: there is no index verb; did you mean indexer (build, validate, list)? search takes -index DIR", ErrUsage))
 	case "stats":
 		return o.fail(o.stats(ctx, dbFile, rest))
 	case "forget":
@@ -158,7 +162,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 	case "untag":
 		return o.fail(o.untag(ctx, dbFile, rest))
 	}
-	return o.fail(fmt.Errorf("%w: unknown verb %q (fill, search, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage, verb))
+	return o.fail(fmt.Errorf("%w: unknown verb %q (fill, search, indexer, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage, verb))
 }
 
 // fail reports err (one line on standard error, and in JSON mode an object on
@@ -356,10 +360,23 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 	fset, j := flags("search", o)
 	limit := fset.Int("limit", 10, "")
 	pinned := fset.Bool("pinned", false, "")
+	idx := fset.String("index", "", "")
 	var tags tagList
 	fset.Var(&tags, "tag", "")
 	if err := parse(fset, args, o, j); err != nil {
 		return err
+	}
+	if *limit < 1 {
+		return fmt.Errorf("%w: -limit must be at least 1", ErrUsage)
+	}
+	if idxSet(fset) {
+		if len(tags) > 0 || *pinned {
+			return fmt.Errorf("%w: -tag and -pinned search the corpus, not an index", ErrUsage)
+		}
+		if *idx == "" {
+			return fmt.Errorf("%w: -index needs a directory", ErrUsage)
+		}
+		return o.searchIndex(*idx, strings.Join(fset.Args(), " "), *limit)
 	}
 	if fset.NArg() == 0 && len(tags) == 0 && !*pinned {
 		return fmt.Errorf("%w: search needs a query, or -tag or -pinned", ErrUsage)
@@ -429,6 +446,12 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 		return ErrNoMatch
 	}
 	return nil
+}
+
+func idxSet(fset *flag.FlagSet) bool {
+	set := false
+	fset.Visit(func(f *flag.Flag) { set = set || f.Name == "index" })
+	return set
 }
 
 func plural(n int, one, many string) string {

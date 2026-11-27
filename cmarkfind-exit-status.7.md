@@ -22,17 +22,20 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : Success.
 
 1
-: The answer is no: search found nothing; forget's SITE or unexclude's PREFIX
+: The answer is no: search found nothing (also over an index); forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents.
 
 2
-: Bad command line: unknown verb, option or topic, missing argument, bad value.
+: Bad command line: unknown verb, option or topic, missing argument, bad value;
+  a query is too large (over 1,024 bytes, 64 clauses or 8 levels of parentheses).
 
 65
-: The file is not a corpus or has a newer schema; a source is malformed.
+: The file is not a corpus or has a newer schema; a source is malformed; an
+  index is damaged (a file does not match its digest, or the manifest is wrong).
 
 66
-: A folder, the corpus (for search and stats) or a table of contents is missing.
+: A folder, the corpus (for search and stats) or a table of contents is missing;
+  an index is missing (no manifest.json in its folder).
 
 69
 : The site cannot be reached.
@@ -41,7 +44,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : A bug.
 
 73
-: The corpus file or its directory cannot be created.
+: The corpus file or its directory, or an index's directory, cannot be created.
 
 75
 : The corpus is locked by another program; try again.

@@ -33,6 +33,13 @@ plain words.</p>
 <dd>
 At most N hits. Default 10.
 </dd>
+<dt>-index DIR</dt>
+<dd>
+Search the index in DIR (see cmarkfind-indexer(7)) instead of the
+corpus. The query is then the Lucene-style language of
+cmarkfind-query(7); -tag and -pinned do not apply. Exit 66 when DIR
+holds no index, 65 when it is damaged, 2 when the query is too large.
+</dd>
 <dt>-json</dt>
 <dd>
 Write {“hits”: […], “searched”: N}.

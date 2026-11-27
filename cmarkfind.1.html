@@ -52,7 +52,26 @@ Search the corpus. QUERY is words, “phrases”, AND, OR, NOT and word*;
 text that is not valid query syntax is searched as plain words. Prints
 each hit’s title, address and tier, and the matching text; the count and
 how many pages were searched go to standard error. Options: -limit N
-(default 10), -json. Use – before a query that starts with a dash.
+(default 10), -tag TAG (repeatable; a page must carry every tag),
+-pinned (only pinned pages), -json. With -tag or -pinned the query may
+be left out: the pages that qualify are listed by title. Pinned matches
+are listed first. Use – before a query that starts with a dash.
+</dd>
+<dt>pin ADDRESS… | pin -list, unpin ADDRESS…</dt>
+<dd>
+Pin pages so they are listed first among the matches of a search, or
+take the pin off. See cmarkfind-pin(7).
+</dd>
+<dt>tag ADDRESS TAG… | tag -list [ADDRESS], untag ADDRESS TAG…</dt>
+<dd>
+Give a page your own tags, or take them off. See cmarkfind-tag(7).
+</dd>
+<dt>indexer build [DIR] | indexer validate [DIR] | indexer [list]
+[DIR]</dt>
+<dd>
+Write a search index from the corpus, check one, or say what one holds.
+DIR defaults to CMARKFIND_INDEX, else an index folder beside the corpus.
+search -index DIR QUERY searches it. See cmarkfind-indexer(7).
 </dd>
 <dt>stats <a href="#options">OPTIONS</a></dt>
 <dd>
@@ -113,16 +132,18 @@ act on; robots.txt forbids the table of contents.
 </dd>
 <dt>2</dt>
 <dd>
-Bad command line: unknown verb or option, missing argument, bad value.
+Bad command line: unknown verb or option, missing argument, bad value; a
+query is too large.
 </dd>
 <dt>65</dt>
 <dd>
-The file is not a corpus or has a newer schema; a source is malformed.
+The file is not a corpus or has a newer schema; a source is malformed;
+an index is damaged.
 </dd>
 <dt>66</dt>
 <dd>
-A folder, the corpus (for search and stats) or a table of contents is
-missing.
+A folder, the corpus (for search and stats), a table of contents or an
+index is missing.
 </dd>
 <dt>69</dt>
 <dd>
@@ -155,9 +176,11 @@ cmarkfind stats
 cmarkfind exclude https://example.org/drafts/
 cmarkfind forget ~/Sites/example.org</code></pre>
 <h1 id="see-also">SEE ALSO</h1>
-<p>cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-stats(7),
-cmarkfind-forget(7), cmarkfind-exclude(7), cmarkfind-unexclude(7),
-cmarkfind-query(7), cmarkfind-corpus(7), cmarkfind-exit-status(7)</p>
+<p>cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-indexer(7),
+cmarkfind-stats(7), cmarkfind-forget(7), cmarkfind-exclude(7),
+cmarkfind-unexclude(7), cmarkfind-pin(7), cmarkfind-unpin(7),
+cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-query(7),
+cmarkfind-corpus(7), cmarkfind-exit-status(7)</p>
 <p>markdownweb, cmarkbrowser, BonBon (Dave Winer)</p>
 </section>
 <footer>

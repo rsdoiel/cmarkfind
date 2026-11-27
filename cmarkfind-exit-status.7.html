@@ -31,22 +31,26 @@ Success.
 </dd>
 <dt>1</dt>
 <dd>
-The answer is no: search found nothing; forget’s SITE or unexclude’s
-PREFIX had nothing to act on; robots.txt forbids the table of contents.
+The answer is no: search found nothing (also over an index); forget’s
+SITE or unexclude’s PREFIX had nothing to act on; robots.txt forbids the
+table of contents.
 </dd>
 <dt>2</dt>
 <dd>
 Bad command line: unknown verb, option or topic, missing argument, bad
-value.
+value; a query is too large (over 1,024 bytes, 64 clauses or 8 levels of
+parentheses).
 </dd>
 <dt>65</dt>
 <dd>
-The file is not a corpus or has a newer schema; a source is malformed.
+The file is not a corpus or has a newer schema; a source is malformed;
+an index is damaged (a file does not match its digest, or the manifest
+is wrong).
 </dd>
 <dt>66</dt>
 <dd>
 A folder, the corpus (for search and stats) or a table of contents is
-missing.
+missing; an index is missing (no manifest.json in its folder).
 </dd>
 <dt>69</dt>
 <dd>
@@ -58,7 +62,8 @@ A bug.
 </dd>
 <dt>73</dt>
 <dd>
-The corpus file or its directory cannot be created.
+The corpus file or its directory, or an index’s directory, cannot be
+created.
 </dd>
 <dt>75</dt>
 <dd>

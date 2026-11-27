@@ -27,6 +27,12 @@ Text that is not valid query syntax is searched as plain words.
 -limit N
 : At most N hits. Default 10.
 
+-index DIR
+: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus. The
+  query is then the Lucene-style language of cmarkfind-query(7); -tag and
+  -pinned do not apply. Exit 66 when DIR holds no index, 65 when it is damaged,
+  2 when the query is too large.
+
 -json
 : Write {"hits": [...], "searched": N}.
 

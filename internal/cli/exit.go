@@ -7,6 +7,7 @@ import (
 	"io/fs"
 
 	"github.com/rsdoiel/cmarkfind/corpus"
+	"github.com/rsdoiel/cmarkfind/index"
 	"github.com/rsdoiel/markdownweb/fetch"
 	"github.com/rsdoiel/markdownweb/page"
 	"github.com/rsdoiel/markdownweb/toc"
@@ -54,7 +55,7 @@ func Classify(err error) (int, string) {
 	switch {
 	case err == nil:
 		return ExitOK, "ok"
-	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag):
+	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag), index.IsQueryLimit(err):
 		return ExitUsage, "usage"
 	case errors.Is(err, fs.ErrPermission):
 		return ExitNoPermission, "no_permission"
@@ -62,9 +63,9 @@ func Classify(err error) (int, string) {
 		return ExitCantCreate, "cant_create"
 	case errors.Is(err, corpus.ErrLocked):
 		return ExitTempFail, "temp_fail"
-	case errors.Is(err, corpus.ErrSchema), errors.Is(err, fetch.ErrData), errors.Is(err, page.ErrData), errors.Is(err, fetch.ErrTooLarge):
+	case errors.Is(err, corpus.ErrSchema), errors.Is(err, fetch.ErrData), errors.Is(err, page.ErrData), errors.Is(err, fetch.ErrTooLarge), index.IsDataError(err):
 		return ExitData, "data"
-	case errors.Is(err, fs.ErrNotExist), errors.Is(err, toc.ErrNoOutline), errors.Is(err, page.ErrNoInput):
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, toc.ErrNoOutline), errors.Is(err, page.ErrNoInput), index.IsMissing(err):
 		return ExitNoInput, "no_input"
 	case errors.Is(err, ErrNoMatch), errors.Is(err, fetch.ErrForbidden):
 		return ExitNegative, "negative"

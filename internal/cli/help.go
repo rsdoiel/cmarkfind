@@ -66,6 +66,11 @@ pin ADDRESS... | pin -list, unpin ADDRESS...
 tag ADDRESS TAG... | tag -list [ADDRESS], untag ADDRESS TAG...
 : Give a page your own tags, or take them off. See cmarkfind-tag(7).
 
+indexer build [DIR] | indexer validate [DIR] | indexer [list] [DIR]
+: Write a search index from the corpus, check one, or say what one holds. DIR
+  defaults to CMARKFIND_INDEX, else an index folder beside the corpus. search
+  -index DIR QUERY searches it. See cmarkfind-indexer(7).
+
 stats [OPTIONS]
 : Say what the corpus holds: pages, pages gone, counts by site and tier, the
   file's size and schema version. Option: -json.
@@ -115,13 +120,16 @@ help [TOPIC]
   act on; robots.txt forbids the table of contents.
 
 2
-: Bad command line: unknown verb or option, missing argument, bad value.
+: Bad command line: unknown verb or option, missing argument, bad value; a
+  query is too large.
 
 65
-: The file is not a corpus or has a newer schema; a source is malformed.
+: The file is not a corpus or has a newer schema; a source is malformed; an
+  index is damaged.
 
 66
-: A folder, the corpus (for search and stats) or a table of contents is missing.
+: A folder, the corpus (for search and stats), a table of contents or an index
+  is missing.
 
 69
 : The site cannot be reached. A fill in which some pages failed finishes, prints
@@ -151,7 +159,7 @@ help [TOPIC]
 
 # SEE ALSO
 
-cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-stats(7), cmarkfind-forget(7),
+cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-indexer(7), cmarkfind-stats(7), cmarkfind-forget(7),
 cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-pin(7),
 cmarkfind-unpin(7), cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-query(7),
 cmarkfind-corpus(7), cmarkfind-exit-status(7)

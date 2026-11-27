@@ -114,6 +114,12 @@ Text that is not valid query syntax is searched as plain words.
 -limit N
 : At most N hits. Default 10.
 
+-index DIR
+: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus. The
+  query is then the Lucene-style language of cmarkfind-query(7); -tag and
+  -pinned do not apply. Exit 66 when DIR holds no index, 65 when it is damaged,
+  2 when the query is too large.
+
 -json
 : Write {"hits": [...], "searched": N}.
 
@@ -132,6 +138,55 @@ cmarkfind-exit-status(7).
 # SEE ALSO
 
 cmarkfind(1), cmarkfind-query(7), cmarkfind-corpus(7)
+`},
+	{"indexer", "build, check and list a search index", `# SYNOPSIS
+
+cmarkfind indexer build [-chunk N] [DIR]
+
+cmarkfind indexer validate [DIR]
+
+cmarkfind indexer [list] [DIR]
+
+cmarkfind search -index DIR QUERY...
+
+# DESCRIPTION
+
+An index is a folder of compressed files, made from the corpus, that a program
+can search without the corpus (and, later, over HTTP). build writes one from
+every page the corpus holds that is not gone and not under an excluded prefix.
+Building again replaces it: the generation number grows by one and files the
+new manifest no longer names are removed. The same pages always give the same
+files.
+
+validate reads every file and checks it against the digest in manifest.json.
+list says what an index holds: pages, chunks, generation and when it was built.
+
+DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
+named index beside the corpus file (so -db moves both). Plain search does not
+read an index; only search -index does.
+
+# OPTIONS
+
+-chunk N
+: Entries per word file when building. Default 10000.
+
+-json
+: Write the result as JSON.
+
+# EXIT STATUS
+
+66 when DIR holds no index (or, for build, there is no corpus), 65 when an index
+is damaged, 73 when DIR cannot be created. See cmarkfind-exit-status(7).
+
+# EXAMPLES
+
+    cmarkfind indexer build
+    cmarkfind indexer validate
+    cmarkfind search -index ~/.local/share/cmarkfind/index 'title:otter OR "shallow water"'
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-search(7), cmarkfind-query(7), cmarkfind-corpus(7)
 `},
 	{"stats", "say what the corpus holds", `# SYNOPSIS
 
@@ -423,17 +478,20 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : Success.
 
 1
-: The answer is no: search found nothing; forget's SITE or unexclude's PREFIX
+: The answer is no: search found nothing (also over an index); forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents.
 
 2
-: Bad command line: unknown verb, option or topic, missing argument, bad value.
+: Bad command line: unknown verb, option or topic, missing argument, bad value;
+  a query is too large (over 1,024 bytes, 64 clauses or 8 levels of parentheses).
 
 65
-: The file is not a corpus or has a newer schema; a source is malformed.
+: The file is not a corpus or has a newer schema; a source is malformed; an
+  index is damaged (a file does not match its digest, or the manifest is wrong).
 
 66
-: A folder, the corpus (for search and stats) or a table of contents is missing.
+: A folder, the corpus (for search and stats) or a table of contents is missing;
+  an index is missing (no manifest.json in its folder).
 
 69
 : The site cannot be reached.
@@ -442,7 +500,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : A bug.
 
 73
-: The corpus file or its directory cannot be created.
+: The corpus file or its directory, or an index's directory, cannot be created.
 
 75
 : The corpus is locked by another program; try again.
