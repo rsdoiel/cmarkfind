@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind.1.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind — a personal search engine for the Markdown web</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind [-db FILE] VERB <a href="#options">OPTIONS</a> ARGS</p>
+<p>cmarkfind -help | -version | -license</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>cmarkfind keeps a corpus of Markdown pages in one SQLite file and
+searches it locally. It fills the corpus from a site’s table of contents
+(/.well-known/toc.opml), from a folder on disk or over the web, and
+searches with SQLite’s FTS5 query language. Nothing is sent anywhere by
+a search.</p>
+<h1 id="verbs">VERBS</h1>
+<dl>
+<dt>fill <a href="#options">OPTIONS</a> SOURCE</dt>
+<dd>
+Read the pages a site’s table of contents lists and store them. SOURCE
+is a folder (a site on disk, nothing fetched) or an http:// or https://
+address (the site’s address, or its toc.opml). Pages already stored are
+asked for again only if they changed. A page the table of contents no
+longer lists is marked gone and is not searched. Options: -pause
+DURATION (between requests to one host, default 1s), -robots (obey
+robots.txt, default true), -user-agent TEXT, -max-pages N, -depth N (how
+many levels of included outlines), -json. A big site can be read a few
+pages at a time: -batch N asks about at most N pages (never asked ones
+first, then the ones checked longest ago) and says how many remain; run
+it again to continue. -every DURATION (with -batch) keeps going, a batch
+every DURATION, until interrupted, or with -until-done until nothing
+remains. A search says how many listed pages are not fetched yet.
+</dd>
+<dt>search <a href="#options">OPTIONS</a> QUERY…</dt>
+<dd>
+Search the corpus. QUERY is words, “phrases”, AND, OR, NOT and word*;
+text that is not valid query syntax is searched as plain words. Prints
+each hit’s title, address and tier, and the matching text; the count and
+how many pages were searched go to standard error. Options: -limit N
+(default 10), -json. Use – before a query that starts with a dash.
+</dd>
+<dt>stats <a href="#options">OPTIONS</a></dt>
+<dd>
+Say what the corpus holds: pages, pages gone, counts by site and tier,
+the file’s size and schema version. Option: -json.
+</dd>
+</dl>
+<p>forget <a href="#options">OPTIONS</a> SITE forget -all : Delete the
+pages stored from one site (named as for fill), or every page.
+Exclusions are kept. -dry-run says how many pages would go and deletes
+nothing. Exit 1 when SITE stored nothing.</p>
+<p>exclude <a href="#options">OPTIONS</a> PREFIX exclude -list : Keep
+every page whose address starts with PREFIX out of the corpus: stored
+pages under it are deleted and later fills skip (and do not request)
+them. PREFIX is an http:// or https:// address, matched as plain text;
+end a folder with a slash. -list shows the rules.</p>
+<dl>
+<dt>unexclude PREFIX</dt>
+<dd>
+Remove an exclusion. Pages come back with the next fill. Exit 1 if there
+was no such rule.
+</dd>
+<dt>help [VERB]</dt>
+<dd>
+Show this page, or one verb’s part.
+</dd>
+</dl>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-db FILE</dt>
+<dd>
+The corpus file. Default: the CMARKFIND_DB variable, else
+cmarkfind/corpus.db in the user’s data directory. fill creates it;
+search and stats need it.
+</dd>
+<dt>-help, -version, -license</dt>
+<dd>
+Show the help, the version or the license.
+</dd>
+<dt>-json</dt>
+<dd>
+On every verb, write the result as JSON on standard output. A failure is
+then also written there as {“error”: “…”, “class”: “…”, “code”: N}.
+</dd>
+</dl>
+<h1 id="exit-status">EXIT STATUS</h1>
+<dl>
+<dt>0</dt>
+<dd>
+Success.
+</dd>
+<dt>1</dt>
+<dd>
+search found nothing; forget’s SITE or unexclude’s PREFIX had nothing to
+act on; robots.txt forbids the table of contents.
+</dd>
+<dt>2</dt>
+<dd>
+Bad command line: unknown verb or option, missing argument, bad value.
+</dd>
+<dt>65</dt>
+<dd>
+The file is not a corpus or has a newer schema; a source is malformed.
+</dd>
+<dt>66</dt>
+<dd>
+A folder, the corpus (for search and stats) or a table of contents is
+missing.
+</dd>
+<dt>69</dt>
+<dd>
+The site cannot be reached. A fill in which some pages failed finishes,
+prints its counts and exits with the class of the first failure.
+</dd>
+<dt>73</dt>
+<dd>
+The corpus file or its directory cannot be created.
+</dd>
+<dt>75</dt>
+<dd>
+The corpus is locked by another program; try again.
+</dd>
+<dt>77</dt>
+<dd>
+The system refused access.
+</dd>
+<dt>70</dt>
+<dd>
+A bug.
+</dd>
+</dl>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind fill ~/Sites/example.org
+cmarkfind fill https://rsdoiel.github.io
+cmarkfind search oberon compiler
+cmarkfind search -json &#39;&quot;shallow water&quot;&#39; | jq .
+cmarkfind stats
+cmarkfind exclude https://example.org/drafts/
+cmarkfind forget ~/Sites/example.org</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>markdownweb, cmarkbrowser, BonBon (Dave Winer)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind.1.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

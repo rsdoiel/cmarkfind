@@ -30,5 +30,15 @@
   "developmentStatus": "concept",
   "issueTracker": "https://github.com/rsdoiel/cmarkfind/issues",
   "copyrightYear": 2026,
-  "copyrightHolder": "R. S. Doiel"
+  "copyrightHolder": "R. S. Doiel",
+  "softwareRequirements": [
+    "Go >= 1.27.4",
+    "github.com/rsdoiel/markdownweb >= 0.0.4",
+    "github.com/glebarez/go-sqlite >= 1.23.0"
+  ],
+  "softwareSuggestions": [
+    "CMTools >= 0.0.45b",
+    "Pandoc >= 3.9",
+    "GNU Make >= 3"
+  ]
 }

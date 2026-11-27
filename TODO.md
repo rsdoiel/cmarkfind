@@ -1,14 +1,27 @@
 
 # Action Items
 
+## Ideas to Explore
+
+- [ ] cmarkfind should be able to leverage the cmarkbrowser's history and book files. 
+- [ ] cmarkfind should be able to leverage knowledges bases configured in cmarkfind
+- [ ] cmarkfind should use the verb, subverb DSL style we've established wth knowledge build's TUI providing both the scriptable actions but also a TUI to use it directly in a terminal.
+- [ ] If I am exploring something using cmarkfind, I should be able to add it to a designated knowledge base.
+
 ## Modernization (2026-11-16)
 
 To match the workspace standard (knowledge and opml are the models; Go 1.27.3 across repositories). Do one repository at a time; run the tests and `make -n release` after each step.
 
-- [x] Makefile: add `generate`. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
-- [x] Makefile: add `check-release` and make `release` run `generate` then `check-release`. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
-- [x] Makefile: add `check-go-version`. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
-- [x] Drop the armv7l target and 32-bit Pi wording. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
-- [x] Add publish.bash and publish.ps1. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
-- [x] Add release.bash and release.ps1. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
-- [x] website.mak, page.tmpl, add-col-scope.lua, website.ps1: take knowledge's. Not applicable yet: cmarkfind holds only notes and a template Makefile; there is no Go code or go.mod yet. Redo the scaffolding from opml when code starts.
+- [x] Makefile: add `generate`. Done 2026-11-26, from opml's Makefile.
+- [x] Makefile: add `check-release` and make `release` run `generate` then `check-release`. Done 2026-11-26 (with `check-committed`); `make check-release` fails only on the uncommitted tree and the 0.0.0 release metadata.
+- [x] Makefile: add `check-go-version`. Done 2026-11-26; codemeta.json now names `Go >= 1.27.4` and the markdownweb and go-sqlite requirements.
+- [x] Drop the armv7l target and 32-bit Pi wording. Done 2026-11-26; the Makefile is opml's, with no armv7l target.
+- [x] Add publish.bash and publish.ps1. Done 2026-11-26, from opml.
+- [x] Add release.bash and release.ps1. Done 2026-11-26, from opml (the single-module script, not knowledge's nested-module one). Untried.
+- [x] website.mak, page.tmpl, add-col-scope.lua, website.ps1: take knowledge's. Done 2026-11-26, from knowledge: PAGE_ORDER lists README, INSTALL, the two INSTALL_NOTES and about; toc.bash and css/site.css added; the dead User Manual nav link dropped (there is no user manual yet).
+
+- [x] PROGRAMS = cmarkfind (2026-11-26, cmarkfind DR-0002 built). makefile_test.go and site_test.go added 2026-11-26 (from opml's; the website is built, with cmarkfind.1.md published from `make build`'s help output).
+- [ ] CLI follow-ups (DR-0002 Open): `-site-url` for a local fill whose outline addresses are not the site's; `verbs` listing and shell completion; pin and tags (a ranking boost, schema version 3).
+- [x] Trickle: fill -batch/-every/-until-done built 2026-11-26 (cmarkfind DR-0004, proposed); schema version 3.
+- [x] Curation: forget, exclude, unexclude built 2026-11-26 (cmarkfind DR-0003, proposed).
+- [ ] Untried: `release.bash`, `publish.bash`, and the `.ps1` scripts; run `release.bash --dry-run` once the tree is committed.

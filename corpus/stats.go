@@ -1,0 +1,113 @@
+package corpus
+
+import (
+	"context"
+	"strings"
+)
+
+/** SiteStat counts the pages that came from one site by one tier.
+ *
+ * Fields:
+ *   Site (string) — the outline address or local root they were filled from
+ *   Tier (string) — how they entered the corpus
+ *   Pages (int)   — pages that are searchable
+ *   Gone (int)    — pages marked gone
+ *   Listed (int)  — pages the outline listed at the last fill
+ *   Pending (int) — of those, not fetched yet
+ *
+ * Example:
+ *   fmt.Println(s.Site, s.Tier, s.Pages)
+ */
+type SiteStat struct {
+	Site, Tier  string
+	Pages, Gone int
+	Listed      int // pages the site's outline listed at the last fill
+	Pending     int // of those, not fetched yet
+}
+
+/** Stats says what a corpus holds.
+ *
+ * Fields:
+ *   Pages (int)         — pages that are searchable
+ *   Gone (int)          — pages marked gone
+ *   SchemaVersion (int) — the schema the file carries
+ *   Excluded (int)      — exclusion rules
+ *   Pending (int)       — pages the sites list that are not fetched yet
+ *   Sites ([]SiteStat)  — counts by site and tier, ordered by site then tier
+ *
+ * Example:
+ *   fmt.Printf("%d pages, %d gone\n", st.Pages, st.Gone)
+ */
+type Stats struct {
+	Pages, Gone   int
+	SchemaVersion int
+	Excluded      int
+	Pending       int
+	Sites         []SiteStat
+}
+
+/** Stats counts what the corpus holds.
+ *
+ * Parameters:
+ *   ctx (context.Context) — cancels the query
+ *
+ * Returns:
+ *   *Stats — the counts; zero for an empty corpus
+ *   error  — from the database
+ *
+ * Example:
+ *   st, err := db.Stats(ctx)
+ */
+func (d *DB) Stats(ctx context.Context) (*Stats, error) {
+	st := &Stats{SchemaVersion: SchemaVersion}
+	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM excluded`).Scan(&st.Excluded); err != nil {
+		return nil, classify(err)
+	}
+	rows, err := d.sql.QueryContext(ctx, `
+SELECT site, tier, coalesce(sum(gone_at = ''), 0), coalesce(sum(gone_at <> ''), 0)
+FROM pages GROUP BY site, tier ORDER BY site, tier`)
+	if err != nil {
+		return nil, classify(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s SiteStat
+		if err := rows.Scan(&s.Site, &s.Tier, &s.Pages, &s.Gone); err != nil {
+			return nil, classify(err)
+		}
+		st.Pages += s.Pages
+		st.Gone += s.Gone
+		st.Sites = append(st.Sites, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, classify(err)
+	}
+	prow, err := d.sql.QueryContext(ctx, `SELECT s.site, s.listed, p.pending FROM sites s JOIN (`+pendingSQL+`) p ON p.site = s.site`)
+	if err != nil {
+		return nil, classify(err)
+	}
+	defer prow.Close()
+	seen := map[string]bool{}
+	for prow.Next() {
+		var site string
+		var listed, pend int
+		if err := prow.Scan(&site, &listed, &pend); err != nil {
+			return nil, classify(err)
+		}
+		st.Pending += pend
+		for i := range st.Sites {
+			if st.Sites[i].Site == site {
+				st.Sites[i].Listed, st.Sites[i].Pending = listed, pend
+				seen[site] = true
+			}
+		}
+		if !seen[site] { // listed, nothing stored yet
+			tier := "own"
+			if strings.HasPrefix(site, "http") {
+				tier = "toc"
+			}
+			st.Sites = append(st.Sites, SiteStat{Site: site, Tier: tier, Listed: listed, Pending: pend})
+		}
+	}
+	return st, classify(prow.Err())
+}

@@ -1,5 +1,5 @@
 <#
-generated with CMTools 0.0.0 
+generated with CMTools 0.0.0 f50285c
 
 .SYNOPSIS
 PowerShell script for running pandoc on all Markdown docs ending in .md
@@ -22,6 +22,7 @@ function Build-HtmlPage {
         if (Test-Path $pandoc) {
             & $pandoc "--metadata" "title=$($htmlPage.Replace('.html', ''))" "-s" "--to" "html5" $mdPage "-o" $htmlPage `
                 "--lua-filter=links-to-html.lua" `
+                "--lua-filter=add-col-scope.lua" `
                 "--template=page.tmpl"
         }
 
@@ -31,15 +32,6 @@ function Build-HtmlPage {
     }
 }
 
-function Invoke-PageFind {
-    # Run PageFind
-    pagefind --verbose --glob="{*.html,docs/*.html}" --force-language en-US --exclude-selectors="nav,header,footer" --output-path ./pagefind --site .
-    git add pagefind
-}
-
 # Build HTML page
 Build-HtmlPage -htmlPages $htmlPages -mdPages $mdPages
-
-# Invoke PageFind
-Invoke-PageFind
 
