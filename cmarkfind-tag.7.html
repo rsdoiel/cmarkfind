@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-tag.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-tag — give a page your own tags</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind tag ADDRESS TAG…</p>
+<p>cmarkfind tag -list [ADDRESS]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Give a page tags, your own words for what it is about. A tag is 1 to
+64 letters, digits, - or _ and is folded to lower case. Tags are not
+part of the page text: a plain word does not match a tag. Find pages by
+tag with cmarkfind search -tag TAG; give -tag more than once and a page
+must carry every tag. Tags are kept by forget and by a refill. Front
+matter tags are not read.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-list</dt>
+<dd>
+Show every tag with the number of pages that carry it, or with an
+ADDRESS, that page’s tags.
+</dd>
+<dt>-json</dt>
+<dd>
+Write the result as JSON.
+</dd>
+</dl>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind tag https://example.org/oberon.md compilers history
+cmarkfind search -tag compilers
+cmarkfind search -tag compilers -tag history oberon</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-untag(7), cmarkfind-search(7),
+cmarkfind-pin(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-tag.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

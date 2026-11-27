@@ -16,7 +16,7 @@ import (
 )
 
 // SchemaVersion is the schema this package reads and writes.
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 var (
 	// ErrSchema says the file is not a corpus this package can use: not a
@@ -33,6 +33,9 @@ var (
 const schema = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS excluded (prefix TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pins (address TEXT PRIMARY KEY, added_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS tags (address TEXT NOT NULL, tag TEXT NOT NULL, added_at TEXT NOT NULL, PRIMARY KEY (address, tag));
+CREATE INDEX IF NOT EXISTS tags_by_tag ON tags(tag);
 CREATE TABLE IF NOT EXISTS attempts (address TEXT PRIMARY KEY, site TEXT NOT NULL, checked_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sites (site TEXT PRIMARY KEY, listed INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS pages (

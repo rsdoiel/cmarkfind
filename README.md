@@ -10,7 +10,7 @@ cmarkfind search oberon compiler
 cmarkfind stats
 ~~~
 
-A big site can be read a few pages at a time with `fill -batch 25 -every 1h -until-done`. `exclude` keeps an address prefix out of the corpus; `forget` deletes a site's pages. `cmarkfind -help` is the manual; `cmarkfind help index` lists the topics (one for each verb, and the query syntax, the corpus and the exit codes); `cmarkfind help TOPIC` shows one.
+A big site can be read a few pages at a time with `fill -batch 25 -every 1h -until-done`. `exclude` keeps an address prefix out of the corpus; `forget` deletes a site's pages. `pin` puts a page first among the matches and `tag` gives it your own words; `search -pinned` and `search -tag` find them again. `cmarkfind -help` is the manual; `cmarkfind help index` lists the topics (one for each verb, and the query syntax, the corpus and the exit codes); `cmarkfind help TOPIC` shows one.
 
 The corpus is `cmarkfind/corpus.db` in your user data directory, or the file named by `-db` or `CMARKFIND_DB`.
 

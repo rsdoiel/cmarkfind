@@ -244,6 +244,117 @@ Remove an exclusion. The pages it kept out come back with the next fill.
 
 cmarkfind(1), cmarkfind-exclude(7)
 `},
+	{"pin", "keep a page near the top of the results", `# SYNOPSIS
+
+cmarkfind pin ADDRESS...
+
+cmarkfind pin -list
+
+# DESCRIPTION
+
+Pin pages. A pinned page that matches a search is listed before the other
+matches; among the pinned ones, and among the others, the order is as before.
+A pin never makes a page match, and a page marked gone is not searched.
+
+ADDRESS is the page's published address as search shows it, an http:// or
+https:// address, matched as written. Pinning twice does nothing. An address the
+corpus does not hold may be pinned (the page may be filled later); that is
+noted on standard error. Pins are kept by forget and by a refill.
+
+# OPTIONS
+
+-list
+: Show the pinned addresses with their titles, and whether each page is stored,
+  gone or not in the corpus.
+
+-json
+: Write the result as JSON.
+
+# EXAMPLES
+
+    cmarkfind pin https://example.org/oberon.md
+    cmarkfind pin -list
+    cmarkfind search -pinned compiler
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-unpin(7), cmarkfind-search(7), cmarkfind-tag(7)
+`},
+	{"unpin", "remove a pin", `# SYNOPSIS
+
+cmarkfind unpin ADDRESS...
+
+# DESCRIPTION
+
+Remove pins. The pages stay in the corpus.
+
+# OPTIONS
+
+-json
+: Write {"unpinned": N}.
+
+# EXIT STATUS
+
+1 when none of the addresses was pinned. See cmarkfind-exit-status(7).
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-pin(7)
+`},
+	{"tag", "give a page your own tags", `# SYNOPSIS
+
+cmarkfind tag ADDRESS TAG...
+
+cmarkfind tag -list [ADDRESS]
+
+# DESCRIPTION
+
+Give a page tags, your own words for what it is about. A tag is 1 to 64 letters,
+digits, - or _ and is folded to lower case. Tags are not part of the page text:
+a plain word does not match a tag. Find pages by tag with
+cmarkfind search -tag TAG; give -tag more than once and a page must carry every
+tag. Tags are kept by forget and by a refill. Front matter tags are not read.
+
+# OPTIONS
+
+-list
+: Show every tag with the number of pages that carry it, or with an ADDRESS,
+  that page's tags.
+
+-json
+: Write the result as JSON.
+
+# EXAMPLES
+
+    cmarkfind tag https://example.org/oberon.md compilers history
+    cmarkfind search -tag compilers
+    cmarkfind search -tag compilers -tag history oberon
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-untag(7), cmarkfind-search(7), cmarkfind-pin(7)
+`},
+	{"untag", "take tags off a page", `# SYNOPSIS
+
+cmarkfind untag ADDRESS TAG...
+
+# DESCRIPTION
+
+Take tags off a page.
+
+# OPTIONS
+
+-json
+: Write {"address": ..., "removed": N}.
+
+# EXIT STATUS
+
+1 when the page carried none of the tags. See cmarkfind-exit-status(7).
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-tag(7)
+`},
 	{"query", "the search syntax", `# DESCRIPTION
 
 A query is SQLite's FTS5 syntax, searched over each page's title, description

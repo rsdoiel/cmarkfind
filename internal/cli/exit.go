@@ -54,7 +54,7 @@ func Classify(err error) (int, string) {
 	switch {
 	case err == nil:
 		return ExitOK, "ok"
-	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix):
+	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag):
 		return ExitUsage, "usage"
 	case errors.Is(err, fs.ErrPermission):
 		return ExitNoPermission, "no_permission"

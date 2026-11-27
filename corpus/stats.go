@@ -32,6 +32,9 @@ type SiteStat struct {
  *   Gone (int)          — pages marked gone
  *   SchemaVersion (int) — the schema the file carries
  *   Excluded (int)      — exclusion rules
+ *   Pinned (int)        — pinned addresses
+ *   Tags (int)          — distinct tags
+ *   TagPages (int)      — tag and page pairs
  *   Pending (int)       — pages the sites list that are not fetched yet
  *   Sites ([]SiteStat)  — counts by site and tier, ordered by site then tier
  *
@@ -42,6 +45,9 @@ type Stats struct {
 	Pages, Gone   int
 	SchemaVersion int
 	Excluded      int
+	Pinned        int // pinned addresses
+	Tags          int // distinct tags
+	TagPages      int // tag and page pairs
 	Pending       int
 	Sites         []SiteStat
 }
@@ -61,6 +67,9 @@ type Stats struct {
 func (d *DB) Stats(ctx context.Context) (*Stats, error) {
 	st := &Stats{SchemaVersion: SchemaVersion}
 	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM excluded`).Scan(&st.Excluded); err != nil {
+		return nil, classify(err)
+	}
+	if err := d.sql.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM pins), (SELECT count(DISTINCT tag) FROM tags), (SELECT count(*) FROM tags)`).Scan(&st.Pinned, &st.Tags, &st.TagPages); err != nil {
 		return nil, classify(err)
 	}
 	rows, err := d.sql.QueryContext(ctx, `

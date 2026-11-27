@@ -108,7 +108,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return o.fail(fmt.Errorf("%w: unknown option %s", ErrUsage, args[0]))
 	}
 	if len(args) == 0 {
-		return o.fail(fmt.Errorf("%w: no verb (fill, search, stats, forget, exclude, unexclude, help)", ErrUsage))
+		return o.fail(fmt.Errorf("%w: no verb (fill, search, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage))
 	}
 	if dbFile == "" {
 		dbFile = DefaultDB()
@@ -149,8 +149,16 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return o.fail(o.exclude(ctx, dbFile, rest))
 	case "unexclude":
 		return o.fail(o.unexclude(ctx, dbFile, rest))
+	case "pin":
+		return o.fail(o.pin(ctx, dbFile, rest))
+	case "unpin":
+		return o.fail(o.unpin(ctx, dbFile, rest))
+	case "tag":
+		return o.fail(o.tag(ctx, dbFile, rest))
+	case "untag":
+		return o.fail(o.untag(ctx, dbFile, rest))
 	}
-	return o.fail(fmt.Errorf("%w: unknown verb %q (fill, search, stats, forget, exclude, unexclude, help)", ErrUsage, verb))
+	return o.fail(fmt.Errorf("%w: unknown verb %q (fill, search, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage, verb))
 }
 
 // fail reports err (one line on standard error, and in JSON mode an object on
@@ -338,14 +346,23 @@ func (o *out) report(r *corpus.FillReport, batched bool) {
 	}
 }
 
+// tagList is a repeatable -tag option.
+type tagList []string
+
+func (t *tagList) String() string     { return strings.Join(*t, ",") }
+func (t *tagList) Set(v string) error { *t = append(*t, v); return nil }
+
 func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 	fset, j := flags("search", o)
 	limit := fset.Int("limit", 10, "")
+	pinned := fset.Bool("pinned", false, "")
+	var tags tagList
+	fset.Var(&tags, "tag", "")
 	if err := parse(fset, args, o, j); err != nil {
 		return err
 	}
-	if fset.NArg() == 0 {
-		return fmt.Errorf("%w: search needs a query", ErrUsage)
+	if fset.NArg() == 0 && len(tags) == 0 && !*pinned {
+		return fmt.Errorf("%w: search needs a query, or -tag or -pinned", ErrUsage)
 	}
 	if *limit < 1 {
 		return fmt.Errorf("%w: -limit must be at least 1", ErrUsage)
@@ -355,25 +372,56 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 		return err
 	}
 	defer db.Close()
-	res, err := db.Search(ctx, strings.Join(fset.Args(), " "), *limit)
+	res, err := db.SearchWith(ctx, strings.Join(fset.Args(), " "), corpus.SearchOptions{Limit: *limit, Tags: tags, Pinned: *pinned})
 	if err != nil {
 		return err
 	}
+	filtered := len(tags) > 0 || *pinned
 	if o.json {
-		hits := make([]map[string]string, 0, len(res.Hits))
+		hits := make([]map[string]any, 0, len(res.Hits))
 		for _, h := range res.Hits {
-			hits = append(hits, map[string]string{"address": h.Address, "title": h.Title, "site": h.Site, "tier": h.Tier, "snippet": h.Snippet})
+			ts := h.Tags
+			if ts == nil {
+				ts = []string{}
+			}
+			hits = append(hits, map[string]any{"address": h.Address, "title": h.Title, "site": h.Site, "tier": h.Tier, "snippet": h.Snippet, "pinned": h.Pinned, "tags": ts})
 		}
-		b, _ := json.Marshal(map[string]any{"hits": hits, "searched": res.Searched, "pending": res.Pending})
+		m := map[string]any{"hits": hits, "searched": res.Searched, "pending": res.Pending}
+		if filtered {
+			m["filtered"] = res.Filtered
+		}
+		b, _ := json.Marshal(m)
 		fmt.Fprintf(o.stdout, "%s\n", b)
 	} else {
 		for _, h := range res.Hits {
-			fmt.Fprintf(o.stdout, "%s\n  %s  [%s]\n  %s\n", h.Title, h.Address, h.Tier, strings.Join(strings.Fields(h.Snippet), " "))
+			marks := ""
+			if h.Pinned {
+				marks += "  pinned"
+			}
+			if len(h.Tags) > 0 {
+				marks += "  tags: " + strings.Join(h.Tags, " ")
+			}
+			fmt.Fprintf(o.stdout, "%s\n  %s  [%s]%s\n", h.Title, h.Address, h.Tier, marks)
+			if h.Snippet != "" {
+				fmt.Fprintf(o.stdout, "  %s\n", strings.Join(strings.Fields(h.Snippet), " "))
+			}
 		}
 		n := len(res.Hits)
 		more := ""
+		if filtered {
+			what := "with the tag"
+			switch {
+			case *pinned && len(tags) > 0:
+				what = "pinned with the tag"
+			case *pinned:
+				what = "pinned"
+			case len(tags) > 1:
+				what = "with the tags"
+			}
+			more = fmt.Sprintf(", %d %s", res.Filtered, what)
+		}
 		if res.Pending > 0 {
-			more = fmt.Sprintf("; %d listed pages not fetched yet", res.Pending)
+			more += fmt.Sprintf("; %d listed pages not fetched yet", res.Pending)
 		}
 		fmt.Fprintf(o.stderr, "%s: %d %s, searched %d pages%s\n", appName, n, plural(n, "hit", "hits"), res.Searched, more)
 	}
@@ -416,11 +464,11 @@ func (o *out) stats(ctx context.Context, dbFile string, args []string) error {
 		for _, s := range st.Sites {
 			sites = append(sites, map[string]any{"site": s.Site, "tier": s.Tier, "pages": s.Pages, "gone": s.Gone, "listed": s.Listed, "pending": s.Pending})
 		}
-		b, _ := json.Marshal(map[string]any{"path": dbFile, "schema_version": st.SchemaVersion, "bytes": size, "pages": st.Pages, "gone": st.Gone, "excluded": st.Excluded, "pending": st.Pending, "sites": sites})
+		b, _ := json.Marshal(map[string]any{"path": dbFile, "schema_version": st.SchemaVersion, "bytes": size, "pages": st.Pages, "gone": st.Gone, "excluded": st.Excluded, "pinned": st.Pinned, "tags": st.Tags, "tag_pages": st.TagPages, "pending": st.Pending, "sites": sites})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 		return nil
 	}
-	fmt.Fprintf(o.stdout, "path %s\nschema %d\nsize %d bytes\npages %d\ngone %d\nexcluded %d\npending %d\n", dbFile, st.SchemaVersion, size, st.Pages, st.Gone, st.Excluded, st.Pending)
+	fmt.Fprintf(o.stdout, "path %s\nschema %d\nsize %d bytes\npages %d\ngone %d\nexcluded %d\npinned %d\ntags %d (%d on pages)\npending %d\n", dbFile, st.SchemaVersion, size, st.Pages, st.Gone, st.Excluded, st.Pinned, st.Tags, st.TagPages, st.Pending)
 	for _, s := range st.Sites {
 		more := ""
 		if s.Pending > 0 {

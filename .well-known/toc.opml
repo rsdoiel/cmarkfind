@@ -14,6 +14,10 @@
 			<outline text="cmarkfind-forget" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-forget.7.md"></outline>
 			<outline text="cmarkfind-exclude" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-exclude.7.md"></outline>
 			<outline text="cmarkfind-unexclude" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-unexclude.7.md"></outline>
+			<outline text="cmarkfind-pin" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-pin.7.md"></outline>
+			<outline text="cmarkfind-unpin" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-unpin.7.md"></outline>
+			<outline text="cmarkfind-tag" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-tag.7.md"></outline>
+			<outline text="cmarkfind-untag" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-untag.7.md"></outline>
 			<outline text="cmarkfind-query" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-query.7.md"></outline>
 			<outline text="cmarkfind-corpus" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-corpus.7.md"></outline>
 			<outline text="cmarkfind-exit-status" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-exit-status.7.md"></outline>

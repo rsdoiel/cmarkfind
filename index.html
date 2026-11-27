@@ -34,7 +34,10 @@ cmarkfind stats</code></pre>
 <p>A big site can be read a few pages at a time with
 <code>fill -batch 25 -every 1h -until-done</code>. <code>exclude</code>
 keeps an address prefix out of the corpus; <code>forget</code> deletes a
-site’s pages. <code>cmarkfind -help</code> is the manual;
+site’s pages. <code>pin</code> puts a page first among the matches and
+<code>tag</code> gives it your own words; <code>search -pinned</code>
+and <code>search -tag</code> find them again.
+<code>cmarkfind -help</code> is the manual;
 <code>cmarkfind help index</code> lists the topics (one for each verb,
 and the query syntax, the corpus and the exit codes);
 <code>cmarkfind help TOPIC</code> shows one.</p>

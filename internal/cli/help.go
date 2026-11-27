@@ -53,8 +53,18 @@ search [OPTIONS] QUERY...
 : Search the corpus. QUERY is words, "phrases", AND, OR, NOT and word*; text
   that is not valid query syntax is searched as plain words. Prints each hit's
   title, address and tier, and the matching text; the count and how many pages
-  were searched go to standard error. Options: -limit N (default 10), -json.
+  were searched go to standard error. Options: -limit N (default 10), -tag TAG
+  (repeatable; a page must carry every tag), -pinned (only pinned pages), -json.
+  With -tag or -pinned the query may be left out: the pages that qualify are
+  listed by title. Pinned matches are listed first.
   Use -- before a query that starts with a dash.
+
+pin ADDRESS... | pin -list, unpin ADDRESS...
+: Pin pages so they are listed first among the matches of a search, or take the
+  pin off. See cmarkfind-pin(7).
+
+tag ADDRESS TAG... | tag -list [ADDRESS], untag ADDRESS TAG...
+: Give a page your own tags, or take them off. See cmarkfind-tag(7).
 
 stats [OPTIONS]
 : Say what the corpus holds: pages, pages gone, counts by site and tier, the
@@ -142,7 +152,8 @@ help [TOPIC]
 # SEE ALSO
 
 cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-stats(7), cmarkfind-forget(7),
-cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-query(7),
+cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-pin(7),
+cmarkfind-unpin(7), cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-query(7),
 cmarkfind-corpus(7), cmarkfind-exit-status(7)
 
 markdownweb, cmarkbrowser, BonBon (Dave Winer)

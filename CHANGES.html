@@ -18,6 +18,27 @@
 </nav>
 <section id="main-content">
 <h1 id="change-log">Change log</h1>
+<h2 id="unreleased">Unreleased</h2>
+<ul>
+<li>Pin and tag: <code>pin</code> and <code>unpin</code> mark a page by
+its address so a pinned match is listed first; <code>tag</code> and
+<code>untag</code> give a page your own tags (letters, digits,
+<code>-</code>, <code>_</code>; folded to lower case; not part of the
+searched text). <code>pin -list</code> and
+<code>tag -list [ADDRESS]</code> show them. Pins and tags are kept by
+<code>forget</code> and by a refill.</li>
+<li><code>search -tag TAG</code> (repeatable, a page must carry every
+tag) and <code>search -pinned</code>; with either, the query may be left
+out and the pages that qualify are listed by title. JSON hits gain
+<code>pinned</code> and <code>tags</code>; <code>stats</code> gains
+<code>pinned</code>, <code>tags</code> and <code>tag_pages</code>.</li>
+<li>Schema version 4 (two new tables); a version 3 file is upgraded in
+place. A cmarkbrowser built for schema 3 exits 65 on a version 4 file
+until it is released against this version: release cmarkfind first, then
+cmarkbrowser.</li>
+<li>Four new help topics: <code>pin</code>, <code>unpin</code>,
+<code>tag</code>, <code>untag</code>.</li>
+</ul>
 <h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>
 <ul>
