@@ -82,7 +82,9 @@ func (s *server) requests() []string {
 	return append([]string(nil), s.reqs...)
 }
 
-func fetcher() *fetch.Fetcher { return fetch.New(fetch.Options{UserAgent: "cmarkfind-test"}) }
+// fetcher is the options a caller gives; remote makes the fetcher and forces
+// SameOrigin itself, so a caller cannot forget it.
+func fetcher() fetch.Options { return fetch.Options{UserAgent: "cmarkfind-test"} }
 
 // firstShard is the relative path of some file of the index that is not the manifest.
 func firstShard(t *testing.T, dir string) string {
