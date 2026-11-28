@@ -268,6 +268,7 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 		if rep != nil {
 			o.report(rep, false)
 		}
+		o.indexWarnings(db)
 		return err
 	}
 	agent := *ua
@@ -280,6 +281,7 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 		if rep != nil {
 			o.report(rep, *batch > 0)
 		}
+		o.indexWarnings(db)
 		return rep, err
 	}
 	if !every0 {
@@ -390,6 +392,7 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 	}
 	defer db.Close()
 	res, err := db.SearchWith(ctx, strings.Join(fset.Args(), " "), corpus.SearchOptions{Limit: *limit, Tags: tags, Pinned: *pinned})
+	o.indexWarnings(db)
 	if err != nil {
 		return err
 	}
@@ -479,16 +482,23 @@ func (o *out) stats(ctx context.Context, dbFile string, args []string) error {
 	if fi, err := os.Stat(dbFile); err == nil {
 		size = fi.Size()
 	}
+	docOnly := st.DocumentOnly
+	if docOnly == nil {
+		docOnly = []string{}
+	}
 	if o.json {
 		sites := make([]map[string]any, 0, len(st.Sites))
 		for _, s := range st.Sites {
 			sites = append(sites, map[string]any{"site": s.Site, "tier": s.Tier, "pages": s.Pages, "gone": s.Gone, "listed": s.Listed, "pending": s.Pending})
 		}
-		b, _ := json.Marshal(map[string]any{"path": dbFile, "schema_version": st.SchemaVersion, "bytes": size, "pages": st.Pages, "gone": st.Gone, "excluded": st.Excluded, "pinned": st.Pinned, "tags": st.Tags, "tag_pages": st.TagPages, "pending": st.Pending, "sites": sites})
+		b, _ := json.Marshal(map[string]any{"path": dbFile, "schema_version": st.SchemaVersion, "bytes": size, "pages": st.Pages, "gone": st.Gone, "excluded": st.Excluded, "pinned": st.Pinned, "tags": st.Tags, "tag_pages": st.TagPages, "pending": st.Pending, "sites": sites, "document_only": docOnly})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 		return nil
 	}
 	fmt.Fprintf(o.stdout, "path %s\nschema %d\nsize %d bytes\npages %d\ngone %d\nexcluded %d\npinned %d\ntags %d (%d on pages)\npending %d\n", dbFile, st.SchemaVersion, size, st.Pages, st.Gone, st.Excluded, st.Pinned, st.Tags, st.TagPages, st.Pending)
+	if len(st.DocumentOnly) > 0 {
+		fmt.Fprintf(o.stdout, "document-only %d  %s\n", len(st.DocumentOnly), strings.Join(st.DocumentOnly, " "))
+	}
 	for _, s := range st.Sites {
 		more := ""
 		if s.Pending > 0 {
@@ -497,6 +507,14 @@ func (o *out) stats(ctx context.Context, dbFile string, args []string) error {
 		fmt.Fprintf(o.stdout, "%s  %d pages, %d gone%s  %s\n", s.Tier, s.Pages, s.Gone, more, s.Site)
 	}
 	return nil
+}
+
+// indexWarnings prints what the corpus's index builds warned about, one line
+// each on standard error, after the command that caused the build.
+func (o *out) indexWarnings(db *corpus.DB) {
+	for _, w := range db.IndexWarnings() {
+		fmt.Fprintf(o.stderr, "%s: warning: %s\n", appName, w)
+	}
 }
 
 // note says something about a negative answer on standard error, not as an error.
@@ -542,6 +560,7 @@ func (o *out) forget(ctx context.Context, dbFile string, args []string) error {
 	default:
 		n, err = db.Forget(ctx, site)
 	}
+	o.indexWarnings(db)
 	if err != nil {
 		return err
 	}
@@ -594,6 +613,7 @@ func (o *out) exclude(ctx context.Context, dbFile string, args []string) error {
 		return nil
 	}
 	n, err := db.Exclude(ctx, fset.Arg(0))
+	o.indexWarnings(db)
 	if err != nil {
 		return err
 	}

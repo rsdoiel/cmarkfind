@@ -24,7 +24,20 @@ and body.
     title:oberon             the word in the title only (also description:, body:)
     (oberon OR modula) -tide groups
 
-Case does not matter. A title match counts for more than a description match,
+Case does not matter, nor does the spelling of an accent or a letter form: an
+accent written as a combining mark, a ligature, a full-width letter and the
+German sharp s match their plain forms (accents are not removed).
+
+Chinese and Japanese are written without spaces, so each Han, Hiragana, Katakana
+or Bopomofo character is a word of its own and a query of several is the phrase
+of them: 東京都 finds the pages that have those three characters in a row, and
+that includes 東京都 inside a longer run of text. There is no dictionary; a
+search finds the characters you wrote, in order, and does not know where the
+words of a sentence begin and end. Korean is written with spaces and its words
+are found as written; a particle attached to a word (한국어를) is reached with a
+prefix, 한국어*. Thai, Lao, Khmer and Burmese are not segmented.
+
+A title match counts for more than a description match,
 and a description match for more than one in the body (bm25 with weights 4, 2
 and 1). Hits that rank the same are put in the order bookmarked, read, own, toc
 pages, then by address.

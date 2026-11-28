@@ -75,8 +75,9 @@ type Anchor struct {
  * each checked against its digest. It is safe for concurrent use.
  */
 type Index struct {
-	src Source
-	m   manifest
+	src     Source
+	m       manifest
+	docOnly map[string]bool // words stored without positions (manifest documentOnly)
 
 	mu     sync.Mutex
 	chunks map[int][]entry
@@ -163,8 +164,26 @@ func openSource(src Source, where string) (*Index, error) {
 	if m.Analyzer != Analyzer {
 		return nil, dataf("analyzer %q is not supported (this reader knows %s)", m.Analyzer, Analyzer)
 	}
-	if len(m.Required) > 0 {
-		return nil, dataf("the index requires features this reader lacks: %s", strings.Join(m.Required, ", "))
+	var lacking []string
+	hasDocOnly := false
+	for _, f := range m.Required {
+		if !knownFeatures[f] {
+			lacking = append(lacking, f)
+		}
+		hasDocOnly = hasDocOnly || f == FeatureDocumentOnly
+	}
+	if len(lacking) > 0 {
+		return nil, dataf("the index requires features this reader lacks: %s", strings.Join(lacking, ", "))
+	}
+	if len(m.DocumentOnly) > 0 && !hasDocOnly {
+		return nil, dataf("the manifest lists document-only words but does not require %s", FeatureDocumentOnly)
+	}
+	docOnly := make(map[string]bool, len(m.DocumentOnly))
+	for i, w := range m.DocumentOnly {
+		if i > 0 && w <= m.DocumentOnly[i-1] {
+			return nil, dataf("the document-only words are not in order")
+		}
+		docOnly[w] = true
 	}
 	if m.Compression != "gzip" && m.Compression != "none" {
 		return nil, dataf("compression %q is not supported", m.Compression)
@@ -187,7 +206,7 @@ func openSource(src Source, where string) (*Index, error) {
 	if next != m.Documents.Count {
 		return nil, dataf("document ranges cover %d documents, the manifest says %d", next, m.Documents.Count)
 	}
-	return &Index{src: src, m: m, chunks: map[int][]entry{}, frags: map[int]*fragmentRec{}}, nil
+	return &Index{src: src, m: m, docOnly: docOnly, chunks: map[int][]entry{}, frags: map[int]*fragmentRec{}}, nil
 }
 
 func wrapMissing(dir string) error {
@@ -223,6 +242,18 @@ func (ix *Index) Chunks() int { return len(ix.m.Chunks) }
  *   g := ix.Generation()
  */
 func (ix *Index) Generation() uint64 { return ix.m.Generation }
+
+/** DocumentOnly returns the words the index stores without positions: the
+ * pages they are on and the fields they are in, not where. A phrase through
+ * one of them can match a page where the other words are in place.
+ *
+ * Returns:
+ *   []string — the terms, sorted; nil when there are none
+ *
+ * Example:
+ *   for _, w := range ix.DocumentOnly() { fmt.Println(w) }
+ */
+func (ix *Index) DocumentOnly() []string { return append([]string(nil), ix.m.DocumentOnly...) }
 
 func (ix *Index) chunk(i int) ([]entry, error) {
 	ix.mu.Lock()
@@ -274,6 +305,25 @@ func (ix *Index) docRows() ([]documentRow, error) {
 }
 
 func (ix *Index) fragment(doc int) (*fragmentRec, error) {
+	ix.mu.Lock()
+	if f, ok := ix.frags[doc]; ok {
+		ix.mu.Unlock()
+		return f, nil
+	}
+	ix.mu.Unlock()
+	fr, err := ix.loadFragment(doc)
+	if err != nil {
+		return nil, err
+	}
+	ix.mu.Lock()
+	ix.frags[doc] = fr
+	ix.mu.Unlock()
+	return fr, nil
+}
+
+// loadFragment reads and decodes the fragment of a document without keeping it:
+// verification reads one for each candidate hit and the page may be megabytes.
+func (ix *Index) loadFragment(doc int) (*fragmentRec, error) {
 	rows, err := ix.docRows()
 	if err != nil {
 		return nil, err
@@ -281,12 +331,6 @@ func (ix *Index) fragment(doc int) (*fragmentRec, error) {
 	if doc < 0 || doc >= len(rows) {
 		return nil, dataf("no document %d", doc)
 	}
-	ix.mu.Lock()
-	if f, ok := ix.frags[doc]; ok {
-		ix.mu.Unlock()
-		return f, nil
-	}
-	ix.mu.Unlock()
 	if len(rows[doc].Fragment) != 32 {
 		return nil, dataf("document %d has a bad fragment digest", doc)
 	}
@@ -298,9 +342,6 @@ func (ix *Index) fragment(doc int) (*fragmentRec, error) {
 	if err := decMode.Unmarshal(raw, &fr); err != nil {
 		return nil, dataf("fragment of document %d: %v", doc, err)
 	}
-	ix.mu.Lock()
-	ix.frags[doc] = &fr
-	ix.mu.Unlock()
 	return &fr, nil
 }
 
@@ -341,8 +382,9 @@ type use struct {
 
 // scan calls fn with every posting of the words matched by the term (an exact
 // word or, with Prefix, every word with that prefix): the document number and
-// the location list.
-func (ix *Index) scan(t Term, fn func(doc int, locs []int64)) error {
+// the uses. A document-only word has one use per field it is in, with the
+// unknown position -1.
+func (ix *Index) scan(t Term, fn func(doc int, uses []use)) error {
 	from := sort.Search(len(ix.m.Chunks), func(i int) bool { return ix.m.Chunks[i].To >= t.Text })
 	for i := from; i < len(ix.m.Chunks); i++ {
 		c := ix.m.Chunks[i]
@@ -361,9 +403,14 @@ func (ix *Index) scan(t Term, fn func(doc int, locs []int64)) error {
 				continue
 			}
 			doc := 0
+			only := ix.docOnly[e.Word]
 			for _, p := range e.Postings {
 				doc += int(p.Delta)
-				fn(doc, p.Locations)
+				if only {
+					fn(doc, weightUses(p.Locations))
+				} else {
+					fn(doc, decodeLocations(p.Locations))
+				}
 			}
 		}
 	}
@@ -374,19 +421,34 @@ func (ix *Index) scan(t Term, fn func(doc int, locs []int64)) error {
 // term.
 func (ix *Index) lookup(t Term) (map[int][]use, error) {
 	out := map[int][]use{}
-	err := ix.scan(t, func(doc int, locs []int64) { out[doc] = append(out[doc], decodeLocations(locs)...) })
+	err := ix.scan(t, func(doc int, us []use) { out[doc] = append(out[doc], us...) })
 	return out, err
 }
 
 // lookupDoc is lookup for one document.
 func (ix *Index) lookupDoc(t Term, want int) (map[int][]use, error) {
 	out := map[int][]use{}
-	err := ix.scan(t, func(doc int, locs []int64) {
+	err := ix.scan(t, func(doc int, us []use) {
 		if doc == want {
-			out[doc] = append(out[doc], decodeLocations(locs)...)
+			out[doc] = append(out[doc], us...)
 		}
 	})
 	return out, err
+}
+
+// unknownPos is the position of a use of a document-only word.
+const unknownPos = -1
+
+// weightUses reads the locations of a document-only word: the weights of the
+// fields it occurs in, each a use at an unknown position.
+func weightUses(ws []int64) []use {
+	out := make([]use, 0, len(ws))
+	for _, w := range ws {
+		if w > 0 {
+			out = append(out, use{pos: unknownPos, weight: int(w)})
+		}
+	}
+	return out
 }
 
 func decodeLocations(locs []int64) []use {
@@ -435,7 +497,7 @@ func (ix *Index) Search(n *Node, limit int) ([]Hit, error) {
 		avg = 1
 	}
 	ev := &evaluator{ix: ix, rows: rows, n: total, avg: avg}
-	scores, err := ev.eval(n)
+	scores, superset, err := ev.eval(n)
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +511,27 @@ func (ix *Index) Search(n *Node, limit int) ([]Hit, error) {
 		}
 		return hits[i].Doc < hits[j].Doc
 	})
+	if superset {
+		// The index's answer holds every page that matches and perhaps more
+		// (a phrase through a document-only word): settle each hit on the
+		// page's own words, best first, until there are enough.
+		kept := make([]Hit, 0, min(len(hits), max(limit, 16)))
+		for _, h := range hits {
+			fr, err := ix.loadFragment(h.Doc)
+			if err != nil {
+				return nil, err
+			}
+			if !matchPage(n, fr) {
+				continue
+			}
+			h.Address = fr.Address
+			kept = append(kept, h)
+			if limit > 0 && len(kept) >= limit {
+				break
+			}
+		}
+		return kept, nil
+	}
 	if limit > 0 && len(hits) > limit {
 		hits = hits[:limit]
 	}
@@ -473,42 +556,54 @@ type evaluator struct {
 	avg  float64
 }
 
-// eval returns the pages a node matches with their scores.
-func (ev *evaluator) eval(n *Node) (map[int]float64, error) {
+// eval returns the pages a node matches with their scores. The second result
+// is true when the answer is only a superset of the pages that match: a phrase
+// through a document-only word can hold pages that do not have the phrase, and
+// whatever is built on it (AND, OR) is a superset too. NOT of a superset is
+// every page, never its complement, which would drop true answers.
+func (ev *evaluator) eval(n *Node) (map[int]float64, bool, error) {
 	switch n.Kind {
 	case KindTerm, KindPhrase:
-		return ev.leaf(n)
+		out, err := ev.leaf(n)
+		return out, ev.ix.uncertain(n), err
 	case KindOr:
 		out := map[int]float64{}
+		sup := false
 		for _, k := range n.Kids {
-			s, err := ev.eval(k)
+			s, ksup, err := ev.eval(k)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
+			sup = sup || ksup
 			for d, v := range s {
 				out[d] += v
 			}
 		}
-		return out, nil
+		return out, sup, nil
 	case KindNot:
-		s, err := ev.eval(n.Kids[0])
+		s, sup, err := ev.eval(n.Kids[0])
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return ev.complement(s), nil
+		if sup {
+			return ev.complement(map[int]float64{}), true, nil
+		}
+		return ev.complement(s), false, nil
 	}
 	// and: intersect the positive clauses, then remove what the NOT clauses match
 	var out map[int]float64
 	var negs []*Node
+	sup := false
 	for _, k := range n.Kids {
 		if k.Kind == KindNot {
 			negs = append(negs, k.Kids[0])
 			continue
 		}
-		s, err := ev.eval(k)
+		s, ksup, err := ev.eval(k)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
+		sup = sup || ksup
 		if out == nil {
 			out = s
 			continue
@@ -525,15 +620,46 @@ func (ev *evaluator) eval(n *Node) (map[int]float64, error) {
 		out = ev.complement(map[int]float64{})
 	}
 	for _, k := range negs {
-		s, err := ev.eval(k)
+		s, ksup, err := ev.eval(k)
 		if err != nil {
-			return nil, err
+			return nil, false, err
+		}
+		if ksup {
+			sup = true // what it matches is not known: remove nothing, check the page text
+			continue
 		}
 		for d := range s {
 			delete(out, d)
 		}
 	}
-	return out, nil
+	return out, sup, nil
+}
+
+// uncertain reports whether the index's answer for a leaf is only a superset:
+// a phrase with a document-only word, whose place in the page it does not know.
+func (ix *Index) uncertain(n *Node) bool {
+	return n.Kind == KindPhrase && ix.hasDocumentOnly(n)
+}
+
+// hasDocumentOnly reports whether any word of a term or phrase is stored
+// without positions (the last word, when it is a prefix, if any word it starts
+// is).
+func (ix *Index) hasDocumentOnly(n *Node) bool {
+	if len(ix.docOnly) == 0 {
+		return false
+	}
+	for i, w := range n.Words {
+		if n.Prefix && i == len(n.Words)-1 {
+			for _, d := range ix.m.DocumentOnly {
+				if strings.HasPrefix(d, w) {
+					return true
+				}
+			}
+		} else if ix.docOnly[w] {
+			return true
+		}
+	}
+	return false
 }
 
 func (ev *evaluator) complement(s map[int]float64) map[int]float64 {
@@ -614,29 +740,91 @@ func bm25(uses []use, df int, n, length, avg float64) float64 {
 
 // phraseAt reports whether the words occur at consecutive positions of
 // document d inside one field: equal weights on consecutive positions mean the
-// same segment, because each segment has its own weight.
+// same segment, because each segment has its own weight. A word with no known
+// position (document-only) matches wherever the document has it in that field;
+// the caller (Search) settles such a phrase on the page text.
 func phraseAt(sets []map[int][]use, d int) bool { return len(phraseStarts(sets, d)) > 0 }
 
-// phraseStarts returns the uses of the first word at which the whole phrase
-// follows in document d.
+// phraseStarts returns the places where the phrase starts in document d: a use
+// whose pos is where the first word is and whose weight is the field. When no
+// word of the phrase has a known position the page matches if every word is in
+// one field, and the use has pos unknownPos.
+//
+// The word with the fewest known places proposes the starts and each is
+// checked against the others by binary search, so a phrase of very common
+// words costs the places of its rarest word, not a scan of the page for each.
 func phraseStarts(sets []map[int][]use, d int) []use {
-	var out []use
-	for _, u := range sets[0][d] {
-		ok := true
-		for k := 1; k < len(sets) && ok; k++ {
-			found := false
-			for _, v := range sets[k][d] {
-				if v.pos == u.pos+k && v.weight == u.weight {
-					found = true
-					break
-				}
+	type word struct {
+		known   []use        // sorted by position
+		unknown map[int]bool // fields the word is in at an unknown place
+	}
+	words := make([]word, len(sets))
+	rarest := -1
+	for k := range sets {
+		w := word{unknown: map[int]bool{}}
+		for _, u := range sets[k][d] {
+			if u.pos == unknownPos {
+				w.unknown[u.weight] = true
+			} else {
+				w.known = append(w.known, u)
 			}
-			ok = found
 		}
-		if ok {
-			out = append(out, u)
+		if len(w.known) == 0 && len(w.unknown) == 0 {
+			return nil // a word the page does not have
+		}
+		sort.Slice(w.known, func(i, j int) bool { return w.known[i].pos < w.known[j].pos })
+		words[k] = w
+		if len(w.known) > 0 && (rarest < 0 || len(w.known) < len(words[rarest].known)) {
+			rarest = k
 		}
 	}
+	has := func(w word, pos, weight int) bool {
+		if w.unknown[weight] {
+			return true
+		}
+		i := sort.Search(len(w.known), func(i int) bool { return w.known[i].pos >= pos })
+		for ; i < len(w.known) && w.known[i].pos == pos; i++ {
+			if w.known[i].weight == weight {
+				return true
+			}
+		}
+		return false
+	}
+	var out []use
+	if rarest < 0 {
+		// no known position anywhere: every word in one field is the best a page can show
+		for weight := range words[0].unknown {
+			ok := true
+			for k := 1; k < len(words) && ok; k++ {
+				ok = words[k].unknown[weight]
+			}
+			if ok {
+				out = append(out, use{pos: unknownPos, weight: weight})
+			}
+		}
+	} else {
+		seen := map[use]bool{}
+		for _, u := range words[rarest].known {
+			start := use{pos: u.pos - rarest, weight: u.weight}
+			if start.pos < 0 || seen[start] {
+				continue
+			}
+			seen[start] = true
+			ok := true
+			for k := 0; k < len(words) && ok; k++ {
+				ok = has(words[k], start.pos+k, start.weight)
+			}
+			if ok {
+				out = append(out, start)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].pos != out[j].pos {
+			return out[i].pos < out[j].pos
+		}
+		return out[i].weight < out[j].weight
+	})
 	return out
 }
 

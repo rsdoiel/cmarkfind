@@ -11,11 +11,13 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/text"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
 
 // Analyzer names the tokenizer below. A manifest carries it so a reader that
 // does not implement it refuses the index instead of matching differently.
-const Analyzer = "unicode-word-v1"
+const Analyzer = "unicode-word-v3"
 
 /** Word is one word of a page: what it looked like and what it is searched as.
  *
@@ -30,13 +32,21 @@ type Word struct {
 	Surface, Term string
 }
 
-/** Words splits text into words by analyzer unicode-word-v1: a word is a
- * maximal run of Unicode letters, combining marks and numbers; everything else
- * (spaces, punctuation, symbols, the underscore and the apostrophe) ends one.
- * Terms are lower-cased with the standard library's case mapping. There is no
- * normalization, stemming or stop list, and scripts written without spaces are
- * one word per run. A later analyzer (for example one with NFKC and UAX 29
- * segmentation) takes another name.
+/** Words splits text into words by analyzer unicode-word-v3: a word is a
+ * maximal run of Unicode letters, combining marks and numbers, except that a
+ * character of Han, Hiragana, Katakana or Bopomofo (and the prolonged sound
+ * mark) is a word by itself, with the combining marks that follow it: Chinese
+ * and Japanese are written without spaces and have no dictionary here, so a
+ * query of several such characters is the phrase of them, a substring search.
+ * A change of script ends a word; everything else (spaces, punctuation,
+ * symbols, the underscore and the apostrophe) ends one too.
+ * A term is the word in Unicode normalization form NFKC, then case folded, so
+ * composed and decomposed accents, ligatures, full-width forms and the sharp s
+ * match their plain spellings. Accents are not removed (naïve and naive are two
+ * words). There is no stemming or stop list; Hangul keeps its spaces, and Thai,
+ * Lao, Khmer and Burmese are one word per run. The surface form and the word
+ * positions are unchanged by normalization. A later analyzer (for example one
+ * with a dictionary) takes another name.
  *
  * Parameters:
  *   s (string) — any text
@@ -45,34 +55,114 @@ type Word struct {
  *   []Word — the words in order; nil when there are none
  *
  * Example:
- *   for _, w := range index.Words("state-of-the-art") { fmt.Println(w.Term) }
+ *   for _, w := range index.Words("state-of-the-art 猫") { fmt.Println(w.Term) }
  */
 func Words(s string) []Word {
 	var out []Word
-	start := -1
-	for i, r := range s {
-		if isWordRune(r) {
-			if start < 0 {
-				start = i
-			}
-			continue
-		}
+	start := -1    // start of a run of a script with spaces
+	cjkStart := -1 // start of a CJK character and the marks that follow it
+	flush := func(i int) {
 		if start >= 0 {
 			out = append(out, newWord(s[start:i]))
 			start = -1
 		}
+		if cjkStart >= 0 {
+			out = append(out, newWord(s[cjkStart:i]))
+			cjkStart = -1
+		}
 	}
-	if start >= 0 {
-		out = append(out, newWord(s[start:]))
+	for i, r := range s {
+		switch {
+		case IsCJKRune(r):
+			flush(i)
+			cjkStart = i
+		case cjkStart >= 0 && (unicode.IsMark(r) || r == 0xFF9E || r == 0xFF9F):
+			// a voicing mark or variation selector stays with its character
+		case isWordRune(r):
+			if cjkStart >= 0 {
+				flush(i)
+			}
+			if start < 0 {
+				start = i
+			}
+		default:
+			flush(i)
+		}
 	}
+	flush(len(s))
 	return out
+}
+
+/** IsCJKRune reports whether r is a character that is a word by itself under
+ * analyzer unicode-word-v3: Han, Hiragana, Katakana, Bopomofo, and the
+ * prolonged sound mark (U+30FC and half-width U+FF70).
+ *
+ * Parameters:
+ *   r (rune) — any character
+ *
+ * Returns:
+ *   bool — true for a character the tokenizer makes a word of its own
+ *
+ * Example:
+ *   ok := index.IsCJKRune('猫') // true
+ */
+func IsCJKRune(r rune) bool {
+	if r < 0x2E80 && r != 0xFF70 { // nothing below U+2E80 is Han, kana or Bopomofo
+		return false
+	}
+	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r) ||
+		unicode.Is(unicode.Bopomofo, r) || r == 0x30FC || r == 0xFF70
+}
+
+/** SpaceBetween reports whether two words of a page, in order, are written with
+ * a space between them: not when both are Chinese or Japanese characters.
+ * Excerpts use it so that a snippet reads as the page does.
+ *
+ * Parameters:
+ *   prev (string) — the word before (a fragment word)
+ *   next (string) — the word after
+ *
+ * Returns:
+ *   bool — false when both begin with a CJK character
+ *
+ * Example:
+ *   index.SpaceBetween("猫", "で") // false
+ */
+func SpaceBetween(prev, next string) bool {
+	return !(startsCJK(prev) && startsCJK(next))
+}
+
+func startsCJK(w string) bool {
+	for _, r := range w {
+		return IsCJKRune(r)
+	}
+	return false
 }
 
 func isWordRune(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsNumber(r)
 }
 
-func newWord(surface string) Word { return Word{Surface: surface, Term: strings.ToLower(surface)} }
+func newWord(surface string) Word {
+	return Word{Surface: surface, Term: term(surface)}
+}
+
+// term is the index key of a word: NFKC, then Unicode case folding. The
+// folder is made per call because a cases.Caser keeps state and is not safe
+// for concurrent use.
+func term(surface string) string {
+	ascii := true
+	for i := 0; i < len(surface); i++ {
+		if surface[i] >= 0x80 {
+			ascii = false
+			break
+		}
+	}
+	if ascii { // NFKC leaves ASCII alone and its case fold is lower case
+		return strings.ToLower(surface)
+	}
+	return cases.Fold().String(norm.NFKC.String(surface))
+}
 
 var md = goldmark.New(goldmark.WithExtensions(extension.GFM))
 

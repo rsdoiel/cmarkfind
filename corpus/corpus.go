@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	sqlite "github.com/glebarez/go-sqlite"
+	"github.com/rsdoiel/cmarkfind/index"
 )
 
 // SchemaVersion is the schema this package reads and writes.
@@ -65,6 +67,10 @@ CREATE TABLE IF NOT EXISTS pages (
 type DB struct {
 	sql  *sql.DB
 	path string
+
+	mu       sync.Mutex
+	warnings []string
+	report   *index.BuildReport
 }
 
 /** Open opens the corpus at path, creating it when the file does not exist.

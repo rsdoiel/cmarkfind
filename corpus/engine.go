@@ -3,6 +3,7 @@ package corpus
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -27,6 +28,7 @@ var ErrIndexShared = errors.New("corpus: the index folder belongs to another cor
 
 const (
 	metaIndexGeneration = "index_generation"
+	metaDocumentOnly    = "document_only_digest"
 	metaCorpusID        = "corpus_id"
 	ownerFile           = ".cmarkfind-owner"
 )
@@ -162,7 +164,8 @@ func (d *DB) BuildIndex(ctx context.Context, dir string, chunk int) (*index.Inde
 	if old, err := index.Open(dir); err == nil {
 		gen = old.Generation() + 1
 	}
-	if err := index.Build(dir, docs, index.BuildOptions{ChunkEntries: chunk, Generation: gen}); err != nil {
+	rep, err := index.BuildWithReport(dir, docs, index.BuildOptions{ChunkEntries: chunk, Generation: gen})
+	if err != nil {
 		if index.IsDataError(err) {
 			return nil, err
 		}
@@ -175,14 +178,105 @@ func (d *DB) BuildIndex(ctx context.Context, dir string, chunk int) (*index.Inde
 	if err != nil {
 		return nil, err
 	}
+	d.mu.Lock()
+	d.report = rep
+	d.mu.Unlock()
 	if own {
 		_, err = d.sql.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 			metaIndexGeneration, strconv.FormatUint(ix.Generation(), 10))
 		if err != nil {
 			return nil, classify(err)
 		}
+		if err := d.noteDocumentOnly(ctx, rep, ix.DocumentOnly()); err != nil {
+			return nil, err
+		}
 	}
 	return ix, nil
+}
+
+// noteDocumentOnly records which words the corpus's own index holds without
+// positions and, when that set is not the one the last build recorded and is
+// not empty, queues a warning for IndexWarnings. A build that changes nothing
+// about the set says nothing.
+func (d *DB) noteDocumentOnly(ctx context.Context, rep *index.BuildReport, words []string) error {
+	sum := sha256.Sum256([]byte(strings.Join(words, "\n")))
+	digest := ""
+	if len(words) > 0 {
+		digest = hex.EncodeToString(sum[:])
+	}
+	var old string
+	err := d.sql.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaDocumentOnly).Scan(&old)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return classify(err)
+	}
+	if _, err := d.sql.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, metaDocumentOnly, digest); err != nil {
+		return classify(err)
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if len(words) > 0 && digest != old {
+		shown := words
+		more := ""
+		if len(shown) > 8 {
+			shown, more = shown[:8], fmt.Sprintf(" and %d more", len(words)-8)
+		}
+		d.warnings = append(d.warnings, fmt.Sprintf("%d %s now indexed without positions: %s%s (a phrase through %s is checked against each page's text)",
+			len(words), pluralWords(len(words)), strings.Join(shown, ", "), more, pronoun(len(words), "it", "them")))
+	}
+	if rep != nil {
+		for _, w := range rep.Warnings {
+			d.warnings = append(d.warnings, w)
+		}
+	}
+	return nil
+}
+
+func pluralWords(n int) string {
+	if n == 1 {
+		return "word is"
+	}
+	return "words are"
+}
+
+func pronoun(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+/** IndexWarnings returns, and forgets, the warnings the corpus's own index
+ * builds since the last call raised: a set of very common words indexed
+ * without positions that differs from the previous build's, and files near
+ * the index file limit. Callers print them after the command that rebuilt.
+ *
+ * Returns:
+ *   []string — one line each, no program name; nil when there are none
+ *
+ * Example:
+ *   for _, w := range db.IndexWarnings() { fmt.Fprintln(os.Stderr, "warning:", w) }
+ */
+func (d *DB) IndexWarnings() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	w := d.warnings
+	d.warnings = nil
+	return w
+}
+
+/** LastBuildReport returns the report of the most recent BuildIndex through
+ * this handle.
+ *
+ * Returns:
+ *   *index.BuildReport — nil when this handle has not built an index
+ *
+ * Example:
+ *   rep := db.LastBuildReport()
+ */
+func (d *DB) LastBuildReport() *index.BuildReport {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.report
 }
 
 // afterFill rebuilds the index when a fill changed the pages. The report and
@@ -397,7 +491,7 @@ func snippet(ix *index.Index, n *index.Node, doc int) (string, string, error) {
 		b.WriteString("… ")
 	}
 	for i := ex.Start; i < ex.End && i < len(words); i++ {
-		if i > ex.Start {
+		if i > ex.Start && index.SpaceBetween(words[i-1], words[i]) {
 			b.WriteByte(' ')
 		}
 		if hit[i] {

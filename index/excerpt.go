@@ -66,6 +66,9 @@ func MakeExcerpt(f Fragment, marks []Mark, length int) Excerpt {
 		}
 	}
 	sort.SliceStable(ms, func(i, j int) bool { return ms[i].Pos < ms[j].Pos })
+	if len(ms) > 0 && startsCJK(words[ms[0].Pos]) {
+		length *= 3 // a CJK word is one character
+	}
 	length = min(length, n)
 	start, best := 0, -1
 	prefix := make([]int, len(ms)+1)
@@ -96,7 +99,7 @@ func MakeExcerpt(f Fragment, marks []Mark, length int) Excerpt {
 	}
 	var h strings.Builder
 	for i := start; i < end; i++ {
-		if i > start {
+		if i > start && SpaceBetween(words[i-1], words[i]) {
 			h.WriteByte(' ')
 		}
 		w := html.EscapeString(words[i])
@@ -105,7 +108,14 @@ func MakeExcerpt(f Fragment, marks []Mark, length int) Excerpt {
 		}
 		h.WriteString(w)
 	}
-	e := Excerpt{Start: start, End: end, Text: strings.Join(words[start:end], " "), HTML: h.String(),
+	var plain strings.Builder
+	for i := start; i < end; i++ {
+		if i > start && SpaceBetween(words[i-1], words[i]) {
+			plain.WriteByte(' ')
+		}
+		plain.WriteString(words[i])
+	}
+	e := Excerpt{Start: start, End: end, Text: plain.String(), HTML: h.String(),
 		Leading: start > 0, Trailing: end < n}
 	for _, a := range f.Anchors {
 		if a.Position <= first {
@@ -139,6 +149,20 @@ func (ix *Index) Marks(n *Node, doc int) ([]Mark, error) {
 		case KindNot:
 			return nil
 		case KindTerm, KindPhrase:
+			if ix.hasDocumentOnly(n) {
+				// where the index has no positions the page's own words say
+				fr, err := ix.fragment(doc)
+				if err != nil {
+					return err
+				}
+				pw := wordsOf(fr)
+				for _, start := range pw.leafMatches(n, "") {
+					for k := range n.Words {
+						at[start+k] = max(at[start+k], fieldWeight[pw.field[start]])
+					}
+				}
+				return nil
+			}
 			sets := make([]map[int][]use, len(n.Words))
 			for i, w := range n.Words {
 				u, err := ix.lookupDoc(Term{Text: w, Prefix: n.Prefix && i == len(n.Words)-1}, doc)
@@ -149,13 +173,23 @@ func (ix *Index) Marks(n *Node, doc int) ([]Mark, error) {
 			}
 			if len(sets) == 1 {
 				for _, u := range sets[0][doc] {
-					at[u.pos] = max(at[u.pos], u.weight)
+					if u.pos != unknownPos {
+						at[u.pos] = max(at[u.pos], u.weight)
+					}
 				}
 				return nil
 			}
 			for _, u := range phraseStarts(sets, doc) {
+				if u.pos == unknownPos {
+					continue
+				}
 				for k := range sets {
-					at[u.pos+k] = max(at[u.pos+k], u.weight)
+					// a document-only word has no place to mark
+					for _, v := range sets[k][doc] {
+						if v.pos == u.pos+k && v.weight == u.weight {
+							at[v.pos] = max(at[v.pos], u.weight)
+						}
+					}
 				}
 			}
 			return nil

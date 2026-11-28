@@ -1,6 +1,8 @@
 package index
 
 import (
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,8 +18,8 @@ func TestTokenizeLowercasesAndSplitsOnEverythingThatIsNotALetterMarkOrDigit(t *t
 		"naïve CAFÉ":        {"naïve", "café"},
 		"v0.0.1":            {"v0", "0", "1"},
 		"snake_case":        {"snake", "case"},
-		"école":            {"école"},   // a combining mark stays in its word
-		"日本語のテキスト":          {"日本語のテキスト"}, // no segmentation of unspaced scripts in version 1
+		"e\u0301cole":       {"\u00e9cole"},                           // a combining mark stays in its word; the term is composed
+		"日本語のテキスト":          {"日", "本", "語", "の", "テ", "キ", "ス", "ト"}, // one word per CJK character
 		"don't":             {"don", "t"},
 		"":                  nil,
 		"  \t\n ":           nil,
@@ -140,4 +142,58 @@ func TestTheWhitespaceInvariantHoldsOnRealMarkdown(t *testing.T) {
 		t.Skip("no Markdown found")
 	}
 	t.Logf("checked %d files", n)
+}
+
+func TestTermsAreNormalizedToNFKCAndCaseFolded(t *testing.T) {
+	same := [][]string{
+		{"café", "café", "CAFÉ", "Café"}, // precomposed and decomposed
+		{"fine", "ﬁne", "FINE"},            // ligature
+		{"full", "ＦＵＬＬ", "Full"},           // full width
+		{"strasse", "Straße", "STRASSE"},   // sharp s folds to ss
+		{"οδοσ", "οδος", "ΟΔΟΣ"},           // Greek final sigma
+		{"x2", "x²", "X₂"},                 // superscript and subscript digits
+	}
+	for _, group := range same {
+		want := Words(group[0])
+		if len(want) != 1 {
+			t.Fatalf("%q is %d words", group[0], len(want))
+		}
+		for _, s := range group[1:] {
+			got := Words(s)
+			if len(got) != 1 || got[0].Term != want[0].Term {
+				t.Errorf("%q: term %+v, want %q", s, got, want[0].Term)
+			}
+		}
+	}
+	// accents are not folded away: naïve and naive stay different words
+	if Words("naïve")[0].Term == Words("naive")[0].Term {
+		t.Error("an accent was folded away")
+	}
+}
+
+func TestNormalizationKeepsTheSurfaceAndTheWordCount(t *testing.T) {
+	in := "Café ﬁne ＦＵＬＬ Straße"
+	ws := Words(in)
+	if len(ws) != 4 {
+		t.Fatalf("words %+v", ws)
+	}
+	for i, want := range []string{"Café", "ﬁne", "ＦＵＬＬ", "Straße"} {
+		if ws[i].Surface != want {
+			t.Errorf("surface %d: %q, want %q", i, ws[i].Surface, want)
+		}
+	}
+}
+
+func TestTheAnalyzerIsNamedV3(t *testing.T) {
+	if Analyzer != "unicode-word-v3" {
+		t.Errorf("analyzer %q", Analyzer)
+	}
+}
+
+func TestTheASCIIFastPathGivesTheSameTermAsTheGeneralPath(t *testing.T) {
+	for _, s := range []string{"Hello", "WORLD", "x1", "a", "MiXeD42", "v0"} {
+		if got, want := term(s), cases.Fold().String(norm.NFKC.String(s)); got != want {
+			t.Errorf("%q: %q, want %q", s, got, want)
+		}
+	}
 }

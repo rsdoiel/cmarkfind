@@ -7,6 +7,7 @@ require (
 	github.com/glebarez/go-sqlite v1.23.0
 	github.com/rsdoiel/markdownweb v0.0.6-0.20261127212007-3ec0cd8a5c56
 	github.com/yuin/goldmark v1.8.7
+	golang.org/x/text v0.44.0
 )
 
 require (

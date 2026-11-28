@@ -3,6 +3,8 @@ package corpus
 import (
 	"context"
 	"strings"
+
+	"github.com/rsdoiel/cmarkfind/index"
 )
 
 /** SiteStat counts the pages that came from one site by one tier.
@@ -50,6 +52,7 @@ type Stats struct {
 	TagPages      int // tag and page pairs
 	Pending       int
 	Sites         []SiteStat
+	DocumentOnly  []string // words the index holds without positions
 }
 
 /** Stats counts what the corpus holds.
@@ -66,6 +69,9 @@ type Stats struct {
  */
 func (d *DB) Stats(ctx context.Context) (*Stats, error) {
 	st := &Stats{SchemaVersion: SchemaVersion}
+	if ix, err := index.Open(d.IndexDir()); err == nil {
+		st.DocumentOnly = ix.DocumentOnly()
+	}
 	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM excluded`).Scan(&st.Excluded); err != nil {
 		return nil, classify(err)
 	}

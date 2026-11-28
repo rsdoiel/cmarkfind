@@ -18,7 +18,9 @@ cmarkfind stats [OPTIONS]
 # DESCRIPTION
 
 Say what the corpus holds: pages, pages gone, counts by site and tier, how many
-listed pages have not been fetched yet, the file's size and its schema version.
+listed pages have not been fetched yet, the file's size and its schema version,
+and, when there are any, the very common words the index holds without
+positions (see cmarkfind-indexer(7)); JSON has them as "document_only".
 
 # OPTIONS
 

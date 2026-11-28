@@ -82,16 +82,34 @@ func (o *out) indexBuild(ctx context.Context, dbFile string, args []string) erro
 	}
 	defer db.Close()
 	ix, err := db.BuildIndex(ctx, dir, *chunk)
+	o.indexWarnings(db)
 	if err != nil {
 		return err
 	}
+	rep := db.LastBuildReport()
 	if o.json {
-		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation()})
+		words := []map[string]any{}
+		long := 0
+		if rep != nil {
+			long = rep.LongTokens
+			for _, w := range rep.DocumentOnly {
+				words = append(words, map[string]any{"word": w.Word, "pages": w.Pages, "positions": w.Positions})
+			}
+		}
+		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "document_only": words, "long_tokens": long})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 		return nil
 	}
 	fmt.Fprintf(o.stdout, "indexed %d %s in %d %s, generation %d, into %s\n", ix.Count(), plural(ix.Count(), "page", "pages"),
 		ix.Chunks(), plural(ix.Chunks(), "chunk", "chunks"), ix.Generation(), dir)
+	if rep != nil {
+		for _, w := range rep.DocumentOnly {
+			fmt.Fprintf(o.stdout, "document-only %s  %d %s, %d positions\n", w.Word, w.Pages, plural(w.Pages, "page", "pages"), w.Positions)
+		}
+		if rep.LongTokens > 0 {
+			fmt.Fprintf(o.stdout, "skipped %d %s over %d bytes\n", rep.LongTokens, plural(rep.LongTokens, "word", "words"), index.MaxTermBytes)
+		}
+	}
 	return nil
 }
 
@@ -130,11 +148,18 @@ func (o *out) indexList(dbFile string, args []string) error {
 		return err
 	}
 	if o.json {
-		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "built": ix.Built()})
+		docOnly := ix.DocumentOnly()
+		if docOnly == nil {
+			docOnly = []string{}
+		}
+		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "built": ix.Built(), "document_only": docOnly})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 		return nil
 	}
 	fmt.Fprintf(o.stdout, "path %s\npages %d\nchunks %d\ngeneration %d\nbuilt %s\n", dir, ix.Count(), ix.Chunks(), ix.Generation(), ix.Built())
+	if w := ix.DocumentOnly(); len(w) > 0 {
+		fmt.Fprintf(o.stdout, "document-only %d  %s\n", len(w), strings.Join(w, " "))
+	}
 	return nil
 }
 

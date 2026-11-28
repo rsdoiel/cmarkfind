@@ -40,6 +40,10 @@ type Doc struct {
  *   ChunkEntries (int) — entries per word chunk; 0 means DefaultChunkEntries
  *   Generation (uint64) — grows with every build of the same index; 0 means 1
  *   Built (time.Time)   — recorded in the manifest; zero means now
+ *   EntryBytes (int)    — encoded size over which a word is written document-only;
+ *                         0 means DefaultEntryBytes
+ *   FileLimit (int)     — largest file the build writes; 0 or more than the format's
+ *                         8 MiB means 8 MiB (smaller values are for tests)
  *
  * Example:
  *   opt := index.BuildOptions{Generation: 3}
@@ -48,6 +52,43 @@ type BuildOptions struct {
 	ChunkEntries int
 	Generation   uint64
 	Built        time.Time
+	EntryBytes   int
+	FileLimit    int
+}
+
+/** DocumentOnlyWord is a word written without positions.
+ *
+ * Fields:
+ *   Word (string)    — the term
+ *   Pages (int)      — pages that hold it
+ *   Positions (int)  — occurrences it had, all pages together
+ *
+ * Example:
+ *   w := index.DocumentOnlyWord{Word: "the", Pages: 328, Positions: 64647}
+ */
+type DocumentOnlyWord struct {
+	Word             string
+	Pages, Positions int
+}
+
+/** BuildReport says what a build did that the person should know about.
+ *
+ * Fields:
+ *   DocumentOnly ([]DocumentOnlyWord) — words written without positions, by word
+ *   LongTokens (int)                  — words over MaxTermBytes left out of the index
+ *   LargestEntryBytes (int)           — encoded size of the biggest entry written
+ *   LargestEntryWord (string)         — that entry's word
+ *   Warnings ([]string)               — files over half the file limit, one line each
+ *
+ * Example:
+ *   rep, err := index.BuildWithReport(dir, docs, index.BuildOptions{})
+ */
+type BuildReport struct {
+	DocumentOnly      []DocumentOnlyWord
+	LongTokens        int
+	LargestEntryBytes int
+	LargestEntryWord  string
+	Warnings          []string
 }
 
 type occurrence struct {
@@ -77,6 +118,52 @@ type rawPosting struct {
  *   err := index.Build("idx", docs, index.BuildOptions{})
  */
 func Build(dir string, docs []Doc, opt BuildOptions) error {
+	_, err := BuildWithReport(dir, docs, opt)
+	return err
+}
+
+/** BuildWithReport is Build that also says which words it wrote without
+ * positions (a word whose entry is over opt.EntryBytes keeps the pages it is
+ * on and the fields it is in, not where), how many words were too long to
+ * index, and which files came near the file limit. A build that cannot fit
+ * writes no manifest and returns an error wrapping ErrTooLarge that names the
+ * word and its page count; an index already in dir is left as it was.
+ *
+ * Parameters:
+ *   dir (string)          — the directory to write; created when missing
+ *   docs ([]Doc)          — the pages; addresses must be unique
+ *   opt (BuildOptions)    — settings
+ *
+ * Returns:
+ *   *BuildReport — what the build did (also when it failed part way)
+ *   error        — nil on success; ErrData for duplicate addresses; ErrTooLarge
+ *
+ * Example:
+ *   rep, err := index.BuildWithReport("idx", docs, index.BuildOptions{})
+ */
+func BuildWithReport(dir string, docs []Doc, opt BuildOptions) (*BuildReport, error) {
+	rep := &BuildReport{}
+	return rep, buildInto(dir, docs, opt, rep)
+}
+
+func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error {
+	if opt.EntryBytes <= 0 {
+		opt.EntryBytes = DefaultEntryBytes
+	}
+	if opt.FileLimit <= 0 || opt.FileLimit > maxFileSize {
+		opt.FileLimit = maxFileSize
+	}
+	// over half the limit is worth a warning; only the biggest file of a kind is named
+	type big struct {
+		size int64
+		what string
+	}
+	biggest := map[string]big{}
+	note := func(kind string, size int64, what string) {
+		if size > biggest[kind].size {
+			biggest[kind] = big{size, what}
+		}
+	}
 	if opt.ChunkEntries <= 0 {
 		opt.ChunkEntries = DefaultChunkEntries
 	}
@@ -132,7 +219,11 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 			}
 			segments = append(segments, [2]uint64{uint64(p.weight), uint64(len(ws))})
 			for _, w := range ws {
-				occ[w.Term] = append(occ[w.Term], occurrence{pos: len(surfaces), weight: p.weight})
+				if len(w.Term) > MaxTermBytes {
+					rep.LongTokens++ // not indexed; still a word of the page, so positions hold
+				} else {
+					occ[w.Term] = append(occ[w.Term], occurrence{pos: len(surfaces), weight: p.weight})
+				}
 				surfaces = append(surfaces, w.Surface)
 			}
 		}
@@ -151,10 +242,11 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 			frag.Fields = fields
 		}
 		frag.Anchors = anchors
-		ref, err := encodeFile(dir, "f", compression, frag)
+		ref, err := encodeFileLimit(dir, "f", compression, frag, opt.FileLimit)
 		if err != nil {
-			return err
+			return fmt.Errorf("the page %s: %w", d.Address, err)
 		}
+		note("fragment", ref.Size, "the text of "+d.Address)
 		digest, _ := hexDecode(ref.Digest)
 		rows = append(rows, documentRow{WordCount: uint64(len(surfaces)), Fragment: digest})
 		totalWords += uint64(len(surfaces))
@@ -166,10 +258,11 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 
 	for first := 0; first < len(rows); first += docsPerTable {
 		last := min(first+docsPerTable, len(rows))
-		ref, err := encodeFile(dir, "d", compression, documentTable{Version: 1, Analyzer: Analyzer, Generation: opt.Generation, Rows: rows[first:last]})
+		ref, err := encodeFileLimit(dir, "d", compression, documentTable{Version: 1, Analyzer: Analyzer, Generation: opt.Generation, Rows: rows[first:last]}, opt.FileLimit)
 		if err != nil {
-			return err
+			return fmt.Errorf("a document table of %d pages: %w", last-first, err)
 		}
+		note("document table", ref.Size, fmt.Sprintf("a table of %d pages", last-first))
 		m.Documents.Ranges = append(m.Documents.Ranges, rangeRef{First: uint64(first), Last: uint64(last - 1), File: ref})
 	}
 
@@ -179,33 +272,71 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 	}
 	sort.Strings(words)
 	var cur []entry
+	var curPages []int // pages and positions of each entry of cur, for the error text
 	count := 0
 	flush := func() error {
 		if len(cur) == 0 {
 			return nil
 		}
-		ref, err := encodeFile(dir, "w", compression, wordChunk{Version: 1, Analyzer: Analyzer, Generation: opt.Generation, Entries: cur})
+		ref, err := encodeFileLimit(dir, "w", compression, wordChunk{Version: 1, Analyzer: Analyzer, Generation: opt.Generation, Entries: cur}, opt.FileLimit)
 		if err != nil {
-			return err
+			if len(cur) == 1 {
+				return fmt.Errorf("the word %q in %d pages: %w", cur[0].Word, curPages[0], err)
+			}
+			return fmt.Errorf("the words %q to %q: %w", cur[0].Word, cur[len(cur)-1].Word, err)
 		}
+		what := fmt.Sprintf("words %q to %q", cur[0].Word, cur[len(cur)-1].Word)
+		if len(cur) == 1 {
+			what = fmt.Sprintf("the word %q in %d pages", cur[0].Word, curPages[0])
+		}
+		note("word chunk", ref.Size, what)
 		m.Chunks = append(m.Chunks, chunkRef{From: cur[0].Word, To: cur[len(cur)-1].Word, File: ref})
-		cur, count = nil, 0
+		cur, curPages, count = nil, nil, 0
 		return nil
 	}
 	for _, w := range words {
 		var ps []posting
-		prev := 0
+		prev, entryCount, positions := 0, 0, 0
 		for _, rp := range postings[w] {
 			ps = append(ps, posting{Delta: uint64(rp.doc - prev), Locations: rp.locs})
 			prev = rp.doc
-			count++ // the posting itself, then one for each position
+			entryCount++ // the posting itself, then one for each position
 			for _, l := range rp.locs {
 				if l >= 0 {
-					count++
+					entryCount++
+					positions++
 				}
 			}
 		}
-		cur = append(cur, entry{Word: w, Postings: ps})
+		e := entry{Word: w, Postings: ps}
+		// An entry costs at least a byte a position and at most nine: only a
+		// big one is encoded to find its size.
+		size := 0
+		if entryCount*9 > opt.EntryBytes {
+			raw, err := encMode.Marshal(e)
+			if err != nil {
+				return err
+			}
+			size = len(raw)
+		}
+		if size > opt.EntryBytes {
+			e = documentOnlyEntry(e)
+			entryCount = len(e.Postings)
+			for _, p := range e.Postings {
+				entryCount += len(p.Locations)
+			}
+			m.DocumentOnly = append(m.DocumentOnly, w)
+			rep.DocumentOnly = append(rep.DocumentOnly, DocumentOnlyWord{Word: w, Pages: len(ps), Positions: positions})
+			if raw, err := encMode.Marshal(e); err == nil {
+				size = len(raw)
+			}
+		}
+		if size > rep.LargestEntryBytes {
+			rep.LargestEntryBytes, rep.LargestEntryWord = size, w
+		}
+		cur = append(cur, e)
+		curPages = append(curPages, len(ps))
+		count += entryCount
 		if count >= opt.ChunkEntries {
 			if err := flush(); err != nil {
 				return err
@@ -215,11 +346,40 @@ func Build(dir string, docs []Doc, opt BuildOptions) error {
 	if err := flush(); err != nil {
 		return err
 	}
+	if len(m.DocumentOnly) > 0 {
+		m.Required = append(m.Required, FeatureDocumentOnly)
+	}
+	for kind, b := range biggest {
+		if b.size > int64(opt.FileLimit)/2 {
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("the largest %s file (%s) is %d bytes, over half of the %d byte limit", kind, b.what, b.size, opt.FileLimit))
+		}
+	}
+	sort.Strings(rep.Warnings)
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
 	return replaceManifest(dir, append(out, '\n'))
+}
+
+// documentOnlyEntry rewrites an entry without positions: each posting keeps
+// the fields the word occurs in as a strictly decreasing list of their weights
+// (4 title, 2 description, 1 body), in place of its locations.
+func documentOnlyEntry(e entry) entry {
+	out := entry{Word: e.Word, Postings: make([]posting, len(e.Postings))}
+	for i, p := range e.Postings {
+		seen := map[int]bool{}
+		for _, u := range decodeLocations(p.Locations) {
+			seen[u.weight] = true
+		}
+		ws := make([]int64, 0, len(seen))
+		for w := range seen {
+			ws = append(ws, int64(w))
+		}
+		sort.Slice(ws, func(a, b int) bool { return ws[a] > ws[b] })
+		out.Postings[i] = posting{Delta: p.Delta, Locations: ws}
+	}
+	return out
 }
 
 // replaceManifest replaces manifest.json whole: the bytes go to a temporary file

@@ -170,7 +170,23 @@ a search that began before the rebuild can finish. The same pages always give th
 files.
 
 validate reads every file and checks it against the digest in manifest.json.
-list says what an index holds: pages, chunks, generation and when it was built.
+list says what an index holds: pages, chunks, generation and when it was built,
+and the words it holds without positions.
+
+A word on a great many pages (a very common word such as "the", in any
+language) can make its entry too big for one index file. Over about 2 MiB an
+entry is written without positions: the index still knows which pages hold the
+word and in which of title, description and body, and not where. A search for
+the word, a prefix, a field clause and AND, OR and NOT work as before. A phrase
+through such a word is checked against the text of each hit, so the answer is
+exact; a query for a phrase through one reads the pages it shows, and the pages
+above them that fail the check, and a limit keeps that small. The word is marked
+in a snippet from the page's text. build
+prints these words with their page and position counts, list prints the words, and a
+fill, forget or exclude that rebuilds warns on standard error when the set of
+words has changed. A word of more than 128 bytes (a hash, a pasted blob) is not
+indexed at all. A build that still cannot fit a file names the word and exits
+73; the index already in place is left as it was and keeps answering searches.
 
 DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
 named index beside the corpus file (so -db moves both). The corpus builds its own index in that folder after every fill, forget or
@@ -215,7 +231,9 @@ cmarkfind stats [OPTIONS]
 # DESCRIPTION
 
 Say what the corpus holds: pages, pages gone, counts by site and tier, how many
-listed pages have not been fetched yet, the file's size and its schema version.
+listed pages have not been fetched yet, the file's size and its schema version,
+and, when there are any, the very common words the index holds without
+positions (see cmarkfind-indexer(7)); JSON has them as "document_only".
 
 # OPTIONS
 
@@ -443,7 +461,20 @@ and body.
     title:oberon             the word in the title only (also description:, body:)
     (oberon OR modula) -tide groups
 
-Case does not matter. A title match counts for more than a description match,
+Case does not matter, nor does the spelling of an accent or a letter form: an
+accent written as a combining mark, a ligature, a full-width letter and the
+German sharp s match their plain forms (accents are not removed).
+
+Chinese and Japanese are written without spaces, so each Han, Hiragana, Katakana
+or Bopomofo character is a word of its own and a query of several is the phrase
+of them: 東京都 finds the pages that have those three characters in a row, and
+that includes 東京都 inside a longer run of text. There is no dictionary; a
+search finds the characters you wrote, in order, and does not know where the
+words of a sentence begin and end. Korean is written with spaces and its words
+are found as written; a particle attached to a word (한국어를) is reached with a
+prefix, 한국어*. Thai, Lao, Khmer and Burmese are not segmented.
+
+A title match counts for more than a description match,
 and a description match for more than one in the body (bm25 with weights 4, 2
 and 1). Hits that rank the same are put in the order bookmarked, read, own, toc
 pages, then by address.

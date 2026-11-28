@@ -48,10 +48,11 @@ uint-key = uint
 
 manifest = {
   format: "cmarkfind/1",
-  analyzer: "unicode-word-v1",     ; how words are made (see the tokenizer note)
+  analyzer: "unicode-word-v3",     ; how words are made (see the tokenizer note)
   generation: uint,                ; grows with every build of the same index
   built: tstr,                     ; RFC 3339 UTC time of the build
   ? required: [* tstr],            ; features a reader must know to use this index
+  ? documentOnly: [* tstr],        ; words stored without positions, sorted (see "posting")
   compression: compression,        ; applies to every file unless a file says otherwise
   documents: documents,
   chunks: [+ chunk],               ; sorted, covering every word, no overlap
@@ -83,7 +84,7 @@ file = [digest: tstr .size 64, size: uint .le max-file-size]
 
 ; Header [version, analyzer, generation, entries]. A reader rejects a file
 ; whose three header values differ from the manifest's.
-word-chunk = [1, "unicode-word-v1", generation: uint, entries: [* entry]]
+word-chunk = [1, "unicode-word-v3", generation: uint, entries: [* entry]]
 
 entry = [word: tstr, postings: [+ posting]]
 
@@ -95,6 +96,21 @@ entry = [word: tstr, postings: [+ posting]]
 ;   meta      reserved (version 1 writers omit it): positions inside a named field,
 ;             [field, delta positions]; written as a second form because a trailing
 ;             optional array element is not read the same way by every tool
+;
+; DOCUMENT-ONLY WORDS. A word whose entry would pass about 2 MiB (a quarter of
+; max-file-size) is written without positions and listed, sorted, in the
+; manifest's "documentOnly"; a manifest that lists any also lists the feature
+; "document-only-words/1" in "required", and a reader refuses a list without it.
+; The "locations" of a posting of such a word are the weights of the fields it
+; occurs in, as a strictly decreasing list of positive integers (4 title, 2
+; description, 1 body), not positions. A reader treats each as one use of the
+; word in that field at an unknown position: it counts for a term search, a
+; field clause and the score. A phrase through such a word is answered by the
+; index as a superset (the other words at their offsets, this one in the same
+; field anywhere in the page) and settled on the fragment: a reader checks each
+; hit's words, in rank order, until it has enough, and NOT of a superset is
+; every page and not its complement. A word longer than 128 bytes is not given an entry at
+; all, and still counts as a word of the page's list.
 posting = [delta: uint, locations: [* int]]
         / [delta: uint, locations: [* int], meta: [* [field: uint, [* uint]]]]
 
@@ -102,7 +118,7 @@ posting = [delta: uint, locations: [* int]]
 
 ; One entry per document number of the range, in order: word_count and the
 ; digest of the document's fragment file (32 bytes, not hex).
-document-table = [1, "unicode-word-v1", generation: uint, rows: [* document-row]]
+document-table = [1, "unicode-word-v3", generation: uint, rows: [* document-row]]
 document-row = [word_count: uint, fragment: bstr .size 32]
 
 ; --------------------------------------------------------------- fragments
@@ -136,4 +152,4 @@ segment = [weight: uint, words: uint]
 ; ------------------------------------------------------------ filter files
 
 ; Reserved. Version 1 writers emit none and readers ignore "filters".
-filter-file = [1, "unicode-word-v1", generation: uint, name: tstr, values: {* text-key => [* uint]}]
+filter-file = [1, "unicode-word-v3", generation: uint, name: tstr, values: {* text-key => [* uint]}]

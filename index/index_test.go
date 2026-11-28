@@ -213,7 +213,7 @@ func TestVerifyCatchesCorruption(t *testing.T) {
 }
 
 func TestOpenRefusesUnknownFormatAndAnalyzer(t *testing.T) {
-	for _, edit := range [][2]string{{`"cmarkfind/1"`, `"cmarkfind/2"`}, {`"unicode-word-v1"`, `"nfkc-v9"`}} {
+	for _, edit := range [][2]string{{`"cmarkfind/1"`, `"cmarkfind/2"`}, {`"unicode-word-v3"`, `"nfkc-v9"`}} {
 		dir := build(t, fixture(), 0)
 		p := filepath.Join(dir, "manifest.json")
 		data, _ := os.ReadFile(p)
@@ -260,5 +260,40 @@ func TestChunkSizeCountsPostingsAndPositions(t *testing.T) {
 	// kilo costs 4 (reaches the limit of 4), so lima starts a second chunk.
 	if got := open(t, build(t, docs, 4)).Chunks(); got != 2 {
 		t.Errorf("chunks = %d, want 2", got)
+	}
+}
+
+func TestSearchMatchesAcrossNormalizationForms(t *testing.T) {
+	docs := []Doc{
+		{Address: "https://example.org/nfc.md", Title: "One", Body: "A café with ﬁne coffee and Straße signs."},
+		{Address: "https://example.org/nfd.md", Title: "Two", Body: "The café serves fine tea near the STRASSE."},
+		{Address: "https://example.org/none.md", Title: "Three", Body: "Nothing relevant, a naive cafe."},
+	}
+	ix := open(t, build(t, docs, 0))
+	for _, q := range []string{"café", "café", "CAFÉ", "fine", "ﬁne", "strasse", "Straße", `"fine coffee"`, "café*"} {
+		hits, err := search(ix, q, 10)
+		if err != nil {
+			t.Fatalf("%q: %v", q, err)
+		}
+		got := addrs(hits)
+		if q == `"fine coffee"` {
+			if len(got) != 1 || got[0] != "https://example.org/nfc.md" {
+				t.Errorf("%q: %v", q, got)
+			}
+			continue
+		}
+		has := map[string]bool{}
+		for _, a := range got {
+			has[a] = true
+		}
+		if !has["https://example.org/nfc.md"] && q != "fine" {
+			t.Errorf("%q misses the first page: %v", q, got)
+		}
+		if !has["https://example.org/nfd.md"] && q != "ﬁne" {
+			t.Errorf("%q misses the second page: %v", q, got)
+		}
+		if has["https://example.org/none.md"] && q != "café*" {
+			t.Errorf("%q found the page without it: %v", q, got)
+		}
 	}
 }

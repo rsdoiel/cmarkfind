@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -406,3 +407,31 @@ func TestExplicitBuildsIntoAnotherFolderDoNotClaimOrCheckOwnership(t *testing.T)
 }
 
 func tocLimits() toc.Limits { return toc.Limits{} }
+
+func TestAnIndexOfAnEarlierAnalyzerIsRebuiltBySearch(t *testing.T) {
+	t.Setenv("CMARKFIND_INDEX", "")
+	db, _ := open(t)
+	fill(t, db, site(t, threePages))
+	mp := filepath.Join(db.IndexDir(), "manifest.json")
+	raw, err := os.ReadFile(mp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := regexp.MustCompile(`"analyzer": "[^"]*"`).ReplaceAllString(string(raw), `"analyzer": "unicode-word-v1"`)
+	if err := os.WriteFile(mp, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := index.Open(db.IndexDir()); err == nil {
+		t.Fatal("a v1 index opened")
+	}
+	res, err := db.Search(context.Background(), "otter", 10)
+	if err != nil {
+		t.Fatalf("search over an old index: %v", err)
+	}
+	if res == nil || len(res.Hits) == 0 {
+		t.Fatal("no hits after the rebuild")
+	}
+	if _, err := index.Open(db.IndexDir()); err != nil {
+		t.Fatalf("index after search: %v", err)
+	}
+}

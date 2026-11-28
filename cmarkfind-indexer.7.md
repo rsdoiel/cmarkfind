@@ -32,7 +32,23 @@ a search that began before the rebuild can finish. The same pages always give th
 files.
 
 validate reads every file and checks it against the digest in manifest.json.
-list says what an index holds: pages, chunks, generation and when it was built.
+list says what an index holds: pages, chunks, generation and when it was built,
+and the words it holds without positions.
+
+A word on a great many pages (a very common word such as "the", in any
+language) can make its entry too big for one index file. Over about 2 MiB an
+entry is written without positions: the index still knows which pages hold the
+word and in which of title, description and body, and not where. A search for
+the word, a prefix, a field clause and AND, OR and NOT work as before. A phrase
+through such a word is checked against the text of each hit, so the answer is
+exact; a query for a phrase through one reads the pages it shows, and the pages
+above them that fail the check, and a limit keeps that small. The word is marked
+in a snippet from the page's text. build
+prints these words with their page and position counts, list prints the words, and a
+fill, forget or exclude that rebuilds warns on standard error when the set of
+words has changed. A word of more than 128 bytes (a hash, a pasted blob) is not
+indexed at all. A build that still cannot fit a file names the word and exits
+73; the index already in place is left as it was and keeps answering searches.
 
 DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
 named index beside the corpus file (so -db moves both). The corpus builds its own index in that folder after every fill, forget or

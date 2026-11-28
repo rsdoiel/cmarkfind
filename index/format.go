@@ -27,6 +27,21 @@ const (
 	maxFiles        = 1000000
 )
 
+const (
+	// DefaultEntryBytes is the encoded size over which a word's entry is
+	// written without positions (document-only): a quarter of the file limit.
+	DefaultEntryBytes = 2 << 20
+	// MaxTermBytes is the longest term indexed; a longer word (a hash, a
+	// pasted blob) is left out of the index and still counted as a word.
+	MaxTermBytes = 128
+	// FeatureDocumentOnly is the manifest feature a reader must know to read an
+	// index that has document-only words.
+	FeatureDocumentOnly = "document-only-words/1"
+)
+
+// knownFeatures are the manifest "required" features this reader implements.
+var knownFeatures = map[string]bool{FeatureDocumentOnly: true}
+
 // Weights of the three parts of a page, in stream order.
 const (
 	weightTitle       = 4
@@ -41,6 +56,9 @@ var (
 	// ErrMissing marks an index (or a file it needs) that cannot be found.
 	// Commands exit 66 on it.
 	ErrMissing = errors.New("index not found")
+	// ErrTooLarge marks a build that would write a file over the file limit
+	// even with its most common words document-only. Commands exit 73 on it.
+	ErrTooLarge = errors.New("index file is too large")
 )
 
 /** IsDataError reports whether err is (or wraps) a data error: content read
@@ -143,14 +161,15 @@ type documentsRec struct {
 }
 
 type manifest struct {
-	Format      string       `json:"format"`
-	Analyzer    string       `json:"analyzer"`
-	Generation  uint64       `json:"generation"`
-	Built       string       `json:"built"`
-	Required    []string     `json:"required,omitempty"`
-	Compression string       `json:"compression"`
-	Documents   documentsRec `json:"documents"`
-	Chunks      []chunkRef   `json:"chunks"`
+	Format       string       `json:"format"`
+	Analyzer     string       `json:"analyzer"`
+	Generation   uint64       `json:"generation"`
+	Built        string       `json:"built"`
+	Required     []string     `json:"required,omitempty"`
+	DocumentOnly []string     `json:"documentOnly,omitempty"`
+	Compression  string       `json:"compression"`
+	Documents    documentsRec `json:"documents"`
+	Chunks       []chunkRef   `json:"chunks"`
 }
 
 // posting is [delta, locations]; a reader ignores trailing elements (the
@@ -250,17 +269,29 @@ func sum(b []byte) string {
 // encodeFile writes one CBOR value to dir/kind/ named by the digest of its
 // uncompressed bytes and returns the file reference.
 func encodeFile(dir, kind, compression string, v any) (fileRef, error) {
+	return encodeFileLimit(dir, kind, compression, v, maxFileSize)
+}
+
+// encodeFileLimit is encodeFile with a smaller file limit (never a larger).
+func encodeFileLimit(dir, kind, compression string, v any, limit int) (fileRef, error) {
 	raw, err := encMode.Marshal(v)
 	if err != nil {
 		return fileRef{}, err
 	}
-	return writeFile(dir, kind, compression, raw)
+	return writeFileLimit(dir, kind, compression, raw, limit)
 }
 
 func writeFile(dir, kind, compression string, raw []byte) (fileRef, error) {
+	return writeFileLimit(dir, kind, compression, raw, maxFileSize)
+}
+
+func writeFileLimit(dir, kind, compression string, raw []byte, limit int) (fileRef, error) {
+	if limit <= 0 || limit > maxFileSize {
+		limit = maxFileSize
+	}
 	ref := fileRef{Digest: sum(raw), Size: int64(len(raw))}
-	if ref.Size > maxFileSize {
-		return ref, fmt.Errorf("index file of %d bytes is over the %d byte limit", ref.Size, maxFileSize)
+	if ref.Size > int64(limit) {
+		return ref, fmt.Errorf("%w: a file of %d bytes is over the %d byte limit", ErrTooLarge, ref.Size, limit)
 	}
 	data := raw
 	if compression == "gzip" {
@@ -350,4 +381,41 @@ type anchorRec struct {
 	Heading  string
 	Position uint64
 	Level    uint64
+}
+
+// decodeRecord reads a CBOR array into its fields in order and ignores unknown
+// trailing elements, as the version rule in format.cddl says a version-1
+// reader does. A record with fewer elements than fields is wrong. what names
+// the record in the error.
+func decodeRecord(b []byte, what string, fields ...any) error {
+	var raw []cbor.RawMessage
+	if err := decMode.Unmarshal(b, &raw); err != nil || len(raw) < len(fields) {
+		return dataf("%s is not an array of at least %d elements", what, len(fields))
+	}
+	for i, f := range fields {
+		if err := decMode.Unmarshal(raw[i], f); err != nil {
+			return dataf("%s element %d: %v", what, i, err)
+		}
+	}
+	return nil
+}
+
+func (e *entry) UnmarshalCBOR(b []byte) error {
+	return decodeRecord(b, "a word entry", &e.Word, &e.Postings)
+}
+
+func (c *wordChunk) UnmarshalCBOR(b []byte) error {
+	return decodeRecord(b, "a word chunk", &c.Version, &c.Analyzer, &c.Generation, &c.Entries)
+}
+
+func (r *documentRow) UnmarshalCBOR(b []byte) error {
+	return decodeRecord(b, "a document row", &r.WordCount, &r.Fragment)
+}
+
+func (d *documentTable) UnmarshalCBOR(b []byte) error {
+	return decodeRecord(b, "a document table", &d.Version, &d.Analyzer, &d.Generation, &d.Rows)
+}
+
+func (a *anchorRec) UnmarshalCBOR(b []byte) error {
+	return decodeRecord(b, "an anchor", &a.Slug, &a.Heading, &a.Position, &a.Level)
 }
