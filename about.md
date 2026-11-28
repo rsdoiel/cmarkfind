@@ -1,7 +1,7 @@
 ---
 title: cmarkfind
 abstract: |-
-  cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with FTS5. cmarkbrowser searches the same file.
+  cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with a partitioned index (BM25 ranking, phrases, Unicode and CJK aware) built beside it. cmarkbrowser searches the same corpus.
 authors:
   - family_name: Doiel
     given_name: R. S.
@@ -45,7 +45,7 @@ About this software
 
 
 
-cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with FTS5. cmarkbrowser searches the same file.
+cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with a partitioned index (BM25 ranking, phrases, Unicode and CJK aware) built beside it. cmarkbrowser searches the same corpus.
 
 - [License](https://www.gnu.org/licenses/agpl-3.0.txt)
 - [Code Repository](https://github.com/rsdoiel/cmarkfind)

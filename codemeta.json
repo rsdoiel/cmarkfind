@@ -13,7 +13,7 @@
   ],
   "dateCreated": "2026-04-25",
   "dateModified": "2026-11-26",
-  "description": "cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with FTS5. cmarkbrowser searches the same file.",
+  "description": "cmarkfind is a personal search engine for the Markdown web. It keeps pages read from a site's table of contents (toc.opml), on disk or over the web, in one SQLite3 file and searches them locally with a partitioned index (BM25 ranking, phrases, Unicode and CJK aware) built beside it. cmarkbrowser searches the same corpus.",
   "keywords": [
     "personal search engine",
     "Markdown",
