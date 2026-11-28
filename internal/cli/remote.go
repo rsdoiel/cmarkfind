@@ -121,3 +121,76 @@ func (o *out) indexAdd(ctx context.Context, dbFile string, args []string) error 
 	fmt.Fprintf(o.stdout, "added %s %s\ngeneration %d\npages %d\n", rs.Source, rs.Name, rs.Generation, found.Pages)
 	return nil
 }
+
+/** indexRefresh is `indexer refresh [SET]`: it reads the manifest of a mirror
+ * or reference again (of every one without SET) and acts by generation: a
+ * higher one replaces what is held, an equal one changes nothing, a lower one
+ * is refused (exit 65). Every set is tried; the exit is the class of the first
+ * failure.
+ */
+func (o *out) indexRefresh(ctx context.Context, dbFile string, args []string) error {
+	fset, j := flags("indexer refresh", o)
+	if err := parse(fset, args, o, j); err != nil {
+		return err
+	}
+	if fset.NArg() > 1 {
+		return fmt.Errorf("%w: indexer refresh takes at most one SET", ErrUsage)
+	}
+	db, err := openExisting(dbFile)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	var names []string
+	if fset.NArg() == 1 {
+		name, err := db.ResolveSet(ctx, fset.Arg(0))
+		if err != nil {
+			return err
+		}
+		names = []string{name} // a set built here is refused below, with its name
+	} else {
+		sets, err := db.Sets(ctx)
+		if err != nil {
+			return err
+		}
+		for _, s := range sets {
+			if s.Source != "local" {
+				names = append(names, s.Name)
+			}
+		}
+	}
+	var first error
+	rows := []map[string]any{}
+	for _, name := range names {
+		before := uint64(0)
+		if ri, err := db.RemoteInfoOf(ctx, name); err == nil && ri != nil {
+			before = ri.Generation
+		}
+		rs, err := db.RefreshRemoteSet(ctx, name)
+		if err != nil {
+			if len(names) == 1 {
+				return err
+			}
+			fmt.Fprintf(o.stderr, "%s: %s: %v\n", appName, name, err)
+			if first == nil {
+				first = err
+			}
+			rows = append(rows, map[string]any{"name": name, "error": err.Error()})
+			continue
+		}
+		rows = append(rows, map[string]any{"name": name, "source": rs.Source, "generation": rs.Generation, "changed": rs.Changed, "files": rs.Files})
+		if o.json {
+			continue
+		}
+		if rs.Changed {
+			fmt.Fprintf(o.stdout, "%s: refreshed, generation %d (was %d), %d %s stored\n", name, rs.Generation, before, rs.Files, plural(rs.Files, "file", "files"))
+		} else {
+			fmt.Fprintf(o.stdout, "%s: current at generation %d\n", name, rs.Generation)
+		}
+	}
+	if o.json {
+		b, _ := json.Marshal(map[string]any{"refreshed": rows})
+		fmt.Fprintf(o.stdout, "%s\n", b)
+	}
+	return first
+}

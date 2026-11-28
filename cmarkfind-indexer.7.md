@@ -23,6 +23,8 @@ cmarkfind indexer discover SITE
 
 cmarkfind indexer add [-reference] SITE
 
+cmarkfind indexer refresh [SET]
+
 # DESCRIPTION
 
 An index is a folder of compressed files, made from the pages of one set
@@ -71,6 +73,16 @@ add is given one, so a site cannot be both filled and mirrored: add of a name
 that is already a set exits 73, and fill of a mirror or reference exits 1. forget
 removes a mirror or reference with its folder, set ignore leaves it out of
 search, and set fields is refused (its field mapping is the publisher's).
+
+refresh reads the manifest of a mirror or reference again (of every one, without
+SET) and acts by its generation. A higher generation replaces what is held: a
+mirror fetches every file again, checks them and swaps them in whole, so the
+folder is always a complete index, and a reference stores the new manifest. An
+equal generation changes nothing and fetches no file. A lower generation is
+refused as a rollback, exit 65, and nothing changes. A set is as old as its last
+refresh: search never fetches a mirror and nothing refreshes by itself. list
+shows each mirror's and reference's manifest, the generation held and when it
+was last checked.
 
 A mirror or reference that cannot be read when searching (the site is down, or a
 file fails its digest) is left out of search with a warning on standard error,
@@ -140,7 +152,11 @@ and 69 when the site cannot be reached. add exits 2 for a missing or bad
 address, 66 when the site publishes no index, 65 when the index fails
 verification or needs a feature or analyzer this program lacks, 69 when the site
 cannot be reached, and 73 when the name is already a set; a failure leaves no
-set and no files behind. See cmarkfind-exit-status(7).
+set and no files behind. refresh tries every set and exits with the class of the
+first failure (65 for a rollback or a file that fails verification, 69 when a
+site cannot be reached), saying which set failed on standard error; a SET that is
+built here is exit 2, and one that does not exist is 66. See
+cmarkfind-exit-status(7).
 
 # EXAMPLES
 
@@ -150,6 +166,7 @@ set and no files behind. See cmarkfind-exit-status(7).
     cmarkfind indexer discover https://example.org/
     cmarkfind indexer add https://example.org/
     cmarkfind indexer add -reference https://example.org/
+    cmarkfind indexer refresh
 
 # SEE ALSO
 

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rsdoiel/cmarkfind/corpus"
 	"github.com/rsdoiel/cmarkfind/index"
@@ -41,8 +42,10 @@ func (o *out) indexer(ctx context.Context, dbFile string, args []string) error {
 		return o.indexDiscover(ctx, dbFile, args)
 	case "add":
 		return o.indexAdd(ctx, dbFile, args)
+	case "refresh":
+		return o.indexRefresh(ctx, dbFile, args)
 	}
-	return fmt.Errorf("%w: unknown indexer verb %q (build, validate, list, discover, add)", ErrUsage, verb)
+	return fmt.Errorf("%w: unknown indexer verb %q (build, validate, list, discover, add, refresh)", ErrUsage, verb)
 }
 
 // indexSets resolves the optional SET argument of an indexer verb: the one set,
@@ -169,9 +172,20 @@ func (o *out) indexList(ctx context.Context, dbFile string, args []string) error
 		if docOnly == nil {
 			docOnly = []string{}
 		}
-		rows = append(rows, map[string]any{"name": s.Name, "path": s.IndexDir, "built": true, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "built_at": ix.Built(), "document_only": docOnly})
+		row := map[string]any{"name": s.Name, "source": s.Source, "path": s.IndexDir, "built": true, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "built_at": ix.Built(), "document_only": docOnly}
+		var ri *corpus.RemoteInfo
+		if s.Source != "local" { // a published index also says where it came from and how old the check is
+			if ri, err = db.RemoteInfoOf(ctx, s.Name); err != nil {
+				return err
+			}
+			row["manifest"], row["checked_at"] = ri.Manifest, ri.CheckedAt
+		}
+		rows = append(rows, row)
 		if !o.json {
-			fmt.Fprintf(o.stdout, "%s\npath %s\npages %d\nchunks %d\ngeneration %d\nbuilt %s\n", s.Name, s.IndexDir, ix.Count(), ix.Chunks(), ix.Generation(), ix.Built())
+			fmt.Fprintf(o.stdout, "%s\nsource %s\npath %s\npages %d\nchunks %d\ngeneration %d\nbuilt %s\n", s.Name, s.Source, s.IndexDir, ix.Count(), ix.Chunks(), ix.Generation(), ix.Built())
+			if ri != nil {
+				fmt.Fprintf(o.stdout, "manifest %s\nchecked %s%s\n", ri.Manifest, ri.CheckedAt, ago(ri.CheckedAt))
+			}
 			if len(docOnly) > 0 {
 				fmt.Fprintf(o.stdout, "document-only %d  %s\n", len(docOnly), strings.Join(docOnly, " "))
 			}
@@ -182,4 +196,23 @@ func (o *out) indexList(ctx context.Context, dbFile string, args []string) error
 		fmt.Fprintf(o.stdout, "%s\n", out)
 	}
 	return nil
+}
+
+// ago says how long ago an RFC 3339 time was, in the one largest unit, as
+// " (3 days ago)"; empty when the time does not parse.
+func ago(stamp string) string {
+	t, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		return ""
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return " (just now)"
+	case d < time.Hour:
+		return fmt.Sprintf(" (%d %s ago)", int(d.Minutes()), plural(int(d.Minutes()), "minute", "minutes"))
+	case d < 48*time.Hour:
+		return fmt.Sprintf(" (%d %s ago)", int(d.Hours()), plural(int(d.Hours()), "hour", "hours"))
+	}
+	return fmt.Sprintf(" (%d days ago)", int(d.Hours()/24))
 }

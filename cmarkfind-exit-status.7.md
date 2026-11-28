@@ -35,7 +35,8 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 65
 : The file is not a corpus or has a newer schema; a source is malformed; an
   index is damaged (a file does not match its digest, or the manifest is wrong);
-  a site's cmarkfind.json is wrong; an index to add or mirror fails verification.
+  a site's cmarkfind.json is wrong; an index to add or mirror fails verification;
+  a published index has a lower generation than the one held (a rollback).
 
 66
 : A folder, the corpus (for search and stats) or a table of contents is missing;

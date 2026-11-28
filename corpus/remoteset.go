@@ -239,3 +239,105 @@ func (d *DB) refuseRemoteSet(ctx context.Context, name string) error {
 	}
 	return nil
 }
+
+// ErrNotPublished marks a set built here being asked to refresh: only a mirror
+// or reference has a published index to check (exit class usage, 2).
+var ErrNotPublished = errors.New("corpus: the set is built here, not from a published index")
+
+/** RemoteInfo is what is kept of where a mirror's or reference's index came from.
+ *
+ * Fields:
+ *   Manifest (string)   — the address of its manifest.json
+ *   CheckedAt (string)  — when the manifest was last read, RFC 3339 UTC
+ *   Generation (uint64) — the generation held
+ */
+type RemoteInfo struct {
+	Manifest   string
+	CheckedAt  string
+	Generation uint64
+}
+
+/** RemoteInfoOf reads source.json of a mirror or reference.
+ *
+ * Parameters:
+ *   name (string) — a set's name as Sets reports it
+ *
+ * Returns:
+ *   *RemoteInfo — nil for a set built here
+ *   error       — ErrNoSet; a data error for a source.json that is not this program's
+ *
+ * Example:
+ *   ri, err := db.RemoteInfoOf(ctx, name)
+ */
+func (d *DB) RemoteInfoOf(ctx context.Context, name string) (*RemoteInfo, error) {
+	src, err := d.SetSource(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if src == "" {
+		return nil, fmt.Errorf("%w: %s", ErrNoSet, name)
+	}
+	if src == "local" {
+		return nil, nil
+	}
+	sf, err := readSource(d.SetIndexDir(name))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return &RemoteInfo{Manifest: sf.Manifest, CheckedAt: sf.CheckedAt, Generation: sf.Generation}, nil
+}
+
+/** RefreshRemoteSet reads a mirror's or reference's manifest again and acts by
+ * its generation: a higher one replaces what is held (a mirror fetches and
+ * swaps every file, a reference stores the new manifest), an equal one changes
+ * nothing and fetches no shard, a lower one is refused as a rollback and
+ * changes nothing. There is no expiry: a set is as old as its last refresh.
+ *
+ * Parameters:
+ *   ctx (context.Context) — cancels the fetches
+ *   name (string)         — a mirror or reference, as Sets reports its name
+ *
+ * Returns:
+ *   *RemoteSet — Generation held now and whether files were stored
+ *   error      — ErrNoSet; ErrNotPublished for a set built here; remote.ErrRollback (a data error), other data errors, a wrapped fetch.ErrUnavailable
+ *
+ * Example:
+ *   rs, err := db.RefreshRemoteSet(ctx, name)
+ */
+func (d *DB) RefreshRemoteSet(ctx context.Context, name string) (*RemoteSet, error) {
+	src, err := d.SetSource(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	switch src {
+	case "":
+		return nil, fmt.Errorf("%w: %s", ErrNoSet, name)
+	case "local":
+		return nil, fmt.Errorf("%w: %s", ErrNotPublished, name)
+	}
+	if err := d.claim(ctx); err != nil {
+		return nil, err
+	}
+	dir := d.SetIndexDir(name)
+	sf, err := readSource(dir)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	var rep *pubindex.Report
+	if src == "mirror" {
+		rep, err = pubindex.Mirror(ctx, d.fetchOpt, sf.Manifest, dir)
+	} else {
+		rep, err = pubindex.StoreManifest(ctx, d.fetchOpt, sf.Manifest, dir)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	// a swapped mirror folder holds the published files only; source.json is written again
+	if err := writeSource(dir, sourceFile{Manifest: sf.Manifest, CheckedAt: stamp(), Generation: rep.Generation}); err != nil {
+		return nil, err
+	}
+	if _, err := d.sql.ExecContext(ctx, `UPDATE sets SET generation = ? WHERE site = ?`, rep.Generation, name); err != nil {
+		return nil, classify(err)
+	}
+	return &RemoteSet{Name: name, Source: src, Manifest: sf.Manifest, Generation: rep.Generation, Changed: rep.Changed, Files: rep.Files}, nil
+}

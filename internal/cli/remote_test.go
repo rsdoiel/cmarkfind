@@ -536,7 +536,7 @@ func TestRefreshOfEverySetTriesAllAndExitsWithTheFirstFailure(t *testing.T) {
 		t.Errorf("refresh all: %+v", r)
 	}
 	// the healthy set was refreshed all the same
-	if r := do(t, "-db", db, "search-set", good.setName(), "-json", "tomatoes"); len(hitsOf(t, r.out)) != 3 {
+	if r := do(t, "-db", db, "search-set", "-json", good.setName(), "tomatoes"); len(hitsOf(t, r.out)) != 3 {
 		t.Errorf("the healthy set was not refreshed: %s", r.out)
 	}
 }
