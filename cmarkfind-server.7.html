@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-server.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-server — run a search service for this machine only</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind server [-json]</p>
+<p>cmarkfind server port [-json] N</p>
+<p>cmarkfind server set NAME VALUE</p>
+<p>cmarkfind server show [-json]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>server answers searches over the web, on this machine and no other,
+so a browser, cmarkbrowser or a script can search the corpus. It listens
+on 127.0.0.1 only, answers only requests made for localhost or 127.0.0.1
+with the port it listens on, sends no CORS header, answers GET and HEAD
+only, and never changes the corpus or builds an index. No login, no TLS:
+anyone who can use this machine can search it. It prints listening on
+and its address as its first line (with -json, {“url”: …, “port”: …})
+and stops cleanly on Ctrl-C or SIGTERM. A set whose index is missing is
+left out of searches, and server says how many on standard error when it
+starts; run cmarkfind indexer build.</p>
+<p>The addresses: / is a small search page; /search is the search;
+/opensearch.xml describes the search for a browser, which can build a
+search box from it. The search, and the pages below, come in three
+formats: Markdown (the default), HTML (a .html suffix, or Accept:
+text/html) and JSON (.json, or Accept: application/json); a suffix wins
+over Accept. The page /search.html has a form and a link a browser reads
+to find the description.</p>
+<p>/search takes q (the query, as cmarkfind-query(7) describes, at most
+1,024 bytes), set (one set, by a name set list shows, else every set not
+ignored), count (hits on a page, 1 to the results setting, which is the
+default too) and startIndex (the first hit, counted from 1). A parameter
+that is not allowed is 400 and names itself. Every format says how many
+hits matched in all (totalResults in JSON), where the page starts
+(startIndex) and how many it holds (itemsPerPage), and links the page
+before and after (previous and next in JSON, relative links such as
+?q=oberon&amp;startIndex=101&amp;count=100). Markdown and HTML say Hits
+101 to 200 of 250. A facet is a link like any other: relative, so it
+runs the narrowed search in the same format, at its first page.</p>
+<p>Unless the info setting is off, /version says the program’s name,
+version, release date and hash; /stats says the settings (and which are
+stored), how long the server has run, how many requests it answered by
+class, how many searches ran and were turned away because it was busy,
+and how many sets and pages the corpus has; and /sets lists the sets by
+the name set takes, with their source, pages and whether they are
+ignored or built. A set’s name is its site key, which for a folder you
+filled is the folder’s path: turn info off if other users of this
+machine should not see it.</p>
+<p>Searches are limited: concurrency of them at once (a further one is
+503 with Retry-After), a request line of 8 KiB, headers of 16 KiB, and
+time to send a request. The HTML pages have no style of their own, so
+the browser’s applies; the css setting adds one stylesheet link.</p>
+<p>server port N runs the service once on port N (0 takes a free port)
+and stores nothing. server set NAME VALUE stores a setting in the
+corpus, to take effect the next time the server starts, and default as
+VALUE removes it. server show lists them. The settings are:</p>
+<dl>
+<dt>port</dt>
+<dd>
+The port, 0 to 65535, default 8900. A stored 0 takes a free port each
+time.
+</dd>
+<dt>concurrency</dt>
+<dd>
+Searches at once, 1 to 256, default the number of CPUs (at least 2).
+</dd>
+<dt>results</dt>
+<dd>
+The most hits on a page, 1 to 1000, default 100.
+</dd>
+<dt>css</dt>
+<dd>
+A stylesheet to link from the HTML pages: an http or https address, or a
+path starting with a slash. The page’s content security policy allows
+that one place for styles and nothing more. Default none.
+</dd>
+<dt>info</dt>
+<dd>
+on or off: whether /version, /stats and /sets answer. Default on.
+</dd>
+</dl>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-json</dt>
+<dd>
+Write the result as JSON (for the first line, show and set).
+</dd>
+</dl>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>2 for a bad sub-verb, setting name or value, or port; 66 when there
+is no corpus; 73 when the port is in use or the listener cannot be made;
+77 when the system refuses the port (those below 1,024, for an ordinary
+user); 74 when a setting cannot be written. A failed request is an HTTP
+status, never the exit status. See cmarkfind-exit-status(7).</p>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind server show
+cmarkfind server set results 50
+cmarkfind server set css https://example.org/site.css
+cmarkfind server set info off
+cmarkfind server
+cmarkfind server port 0</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-search(7), cmarkfind-query(7),
+cmarkfind-set(7), cmarkfind-indexer(7), cmarkfind-exit-status(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-server.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

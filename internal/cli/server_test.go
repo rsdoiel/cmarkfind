@@ -29,7 +29,8 @@ type syncBuf struct {
 func (s *syncBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
 func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
 
-var listening = regexp.MustCompile(`listening on (http://127\.0\.0\.1:(\d+)/)`)
+// the first line is `listening on URL`, or with -json {"url":"URL","port":N}
+var listening = regexp.MustCompile(`(?:listening on |"url":")(http://127\.0\.0\.1:(\d+)/)`)
 
 // serving is a running `cmarkfind server`: its address, and how to stop it.
 type serving struct {
@@ -289,8 +290,8 @@ func TestServerSaysOnStandardErrorWhenASetNeedsBuildingAndDoesNotBuildIt(t *test
 	if e := s.stderr.String(); !strings.Contains(e, "indexer build") || !strings.Contains(e, "1 set") {
 		t.Errorf("no start-up warning about the set that needs an index: %q", e)
 	}
-	if code, body := s.get(t, "/search.json?q=otter"); code != 200 || strings.Contains(body, "example.org/a.md") {
-		t.Errorf("a set with no index must be left out: %d\n%s", code, body)
+	if code, body := s.get(t, "/search.json?q=otter"); code != 503 || strings.Contains(body, "example.org/a.md") || !strings.Contains(body, "needs building") {
+		t.Errorf("the only set has no index: %d %q, want 503 saying it needs building", code, body)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("the server built the index: %v", err)

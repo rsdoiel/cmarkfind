@@ -9,6 +9,7 @@ import (
 
 	"github.com/rsdoiel/cmarkfind/corpus"
 	"github.com/rsdoiel/cmarkfind/index"
+	"github.com/rsdoiel/cmarkfind/server"
 	"github.com/rsdoiel/markdownweb/fetch"
 	"github.com/rsdoiel/markdownweb/page"
 	"github.com/rsdoiel/markdownweb/toc"
@@ -75,11 +76,11 @@ func Classify(err error) (int, string) {
 	switch {
 	case err == nil:
 		return ExitOK, "ok"
-	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag), errors.Is(err, corpus.ErrAmbiguousSet), errors.Is(err, corpus.ErrBadCollectionName), errors.Is(err, corpus.ErrNotPublished), errors.Is(err, corpus.ErrBadFieldMapping), errors.Is(err, corpus.ErrCollectionRoot), index.IsQueryLimit(err):
+	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag), errors.Is(err, corpus.ErrAmbiguousSet), errors.Is(err, corpus.ErrBadCollectionName), errors.Is(err, corpus.ErrNotPublished), errors.Is(err, server.ErrBadSetting), errors.Is(err, corpus.ErrBadFieldMapping), errors.Is(err, corpus.ErrCollectionRoot), index.IsQueryLimit(err):
 		return ExitUsage, "usage"
 	case errors.Is(err, corpus.ErrIndexShared):
 		return ExitConfig, "config"
-	case errors.Is(err, fs.ErrPermission):
+	case errors.Is(err, fs.ErrPermission), errors.Is(err, errPermission):
 		return ExitNoPermission, "no_permission"
 	case errors.Is(err, ErrCantCreate), errors.Is(err, corpus.ErrIndex), errors.Is(err, corpus.ErrSetExists):
 		return ExitCantCreate, "cant_create"
@@ -98,3 +99,6 @@ func Classify(err error) (int, string) {
 	}
 	return ExitInternal, "internal"
 }
+
+// errPermission marks a port the system refused (exit 77).
+var errPermission = errors.New("permission refused")

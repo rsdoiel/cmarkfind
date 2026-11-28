@@ -138,11 +138,11 @@ func bashReplies(t *testing.T, scriptText, typed string) []string {
 }
 
 var completionCases = []struct{ typed, want string }{
-	{"", "completion exclude fill forget help indexer pin search search-set set stats tag unexclude unpin untag verbs"},
+	{"", "completion exclude fill forget help indexer pin search search-set server set stats tag unexclude unpin untag verbs"},
 	{"fi", "fill"},
 	{"-", "-db -help -license -version"},
-	{"-db x.db se", "search search-set set"},
-	{"-db x.db ", "completion exclude fill forget help indexer pin search search-set set stats tag unexclude unpin untag verbs"},
+	{"-db x.db se", "search search-set server set"},
+	{"-db x.db ", "completion exclude fill forget help indexer pin search search-set server set stats tag unexclude unpin untag verbs"},
 	{"fill -s", "-site-url"},
 	{"fill -b", "-batch"},
 	{"fill -pause 5s -u", "-until-done -user-agent"},
@@ -158,7 +158,7 @@ var completionCases = []struct{ typed, want string }{
 	{"completion ", "bash powershell"},
 	{"completion bash -", "-check -install -json -uninstall"},
 	{"help v", "verbs"},
-	{"help ", "completion corpus exclude exit-status fill forget index indexer pin query search search-set set stats tag unexclude unpin untag verbs"},
+	{"help ", "completion corpus exclude exit-status fill forget index indexer pin query search search-set server set stats tag unexclude unpin untag verbs"},
 	{"help fill ", ""},
 	{"stats -j", "-json"},
 }

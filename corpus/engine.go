@@ -275,7 +275,7 @@ const rrfK = 60
 // first, then the fused score, tier and address; cut at limit, with a bracketed
 // snippet each. The pinned and tag sets filter before ranking. With aggregate,
 // a set whose analyzer this program does not read is left out with a warning.
-func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int, opts SearchOptions) ([]Hit, []FacetField, error) {
+func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int, opts SearchOptions) ([]Hit, int, []FacetField, error) {
 	// open each set's index first: a query's field clauses are parsed for the
 	// union of the fields the sets offer, and a set that lacks one matches nothing for it
 	type opened struct {
@@ -285,7 +285,7 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 	}
 	sources, err := d.sourcesOf(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, nil, err
 	}
 	var firstFail error // the first mirror or reference that could not be read (DR-0017 item 4)
 	leftOut := func(site string, err error) {
@@ -301,7 +301,7 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 	var fields, dateFields []string
 	dateSeen := map[string]bool{}
 	for _, site := range sites {
-		ix, err := d.currentSet(ctx, site)
+		ix, err := d.currentSetOpt(ctx, site, opts.NoBuild)
 		if aggregate && index.IsAnalyzerError(err) {
 			// never mixed: a set in another word rule is left out, and said so
 			d.mu.Lock()
@@ -309,12 +309,12 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 			d.mu.Unlock()
 			continue
 		}
-		if err != nil && aggregate && sources[site] != "local" {
+		if err != nil && aggregate && (sources[site] != "local" || errors.Is(err, ErrNeedsBuild)) {
 			leftOut(site, err)
 			continue
 		}
 		if err != nil {
-			return nil, nil, err
+			return nil, 0, nil, err
 		}
 		sets = append(sets, opened{site, sources[site], ix})
 		for _, f := range ix.DateFields() {
@@ -331,24 +331,24 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		}
 	}
 	if len(sets) == 0 && firstFail != nil {
-		return nil, nil, firstFail
+		return nil, 0, nil, firstFail
 	}
 	node, err := index.ParseQueryFields(query, fields, dateFields)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, nil, err
 	}
 	if node == nil {
-		return nil, nil, nil
+		return nil, 0, nil, nil
 	}
 	excluded, err := d.excludedBy(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, nil, err
 	}
 	readable := 0
 	var ok map[string]bool
 	if frag != "" {
 		if ok, err = d.passing(ctx, frag, fargs); err != nil {
-			return nil, nil, err
+			return nil, 0, nil, err
 		}
 	}
 	type cand struct {
@@ -392,13 +392,13 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 			continue
 		}
 		if err != nil {
-			return nil, nil, err
+			return nil, 0, nil, err
 		}
 		readable++
 		if set.source != "local" {
 			mine, err := d.publishedHits(ctx, set.site, set.source, found, opts, excluded)
 			if err != nil {
-				return nil, nil, err
+				return nil, 0, nil, err
 			}
 			for _, c := range mine {
 				meta[c.Address] = pageMeta{site: set.site, tier: set.source, pinned: c.Pinned}
@@ -425,7 +425,7 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		}
 		m, err := d.metaOf(ctx, addrs)
 		if err != nil {
-			return nil, nil, err
+			return nil, 0, nil, err
 		}
 		var mine []*cand
 		for _, h := range found {
@@ -437,7 +437,7 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		finish(mine, set.site, ix)
 	}
 	if readable == 0 && firstFail != nil {
-		return nil, nil, firstFail
+		return nil, 0, nil, firstFail
 	}
 	sort.SliceStable(all, func(i, j int) bool {
 		a, b := all[i], all[j]
@@ -455,17 +455,17 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 	})
 	facets, err := d.facetsOf(ctx, found4facets, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, nil, err
 	}
-	if len(all) > limit {
-		all = all[:limit]
-	}
+	total := len(all) // every match, whatever page is asked for
+	from := min(max(opts.Offset, 0), total)
+	all = all[from:min(from+limit, total)]
 	hits := make([]Hit, 0, len(all))
 	for _, c := range all {
 		m := meta[c.h.Address]
 		snip, anchor, err := snippet(c.ix, node, c.h.Doc)
 		if err != nil {
-			return nil, nil, err
+			return nil, 0, nil, err
 		}
 		title := m.title
 		if c.fromIndex {
@@ -475,7 +475,7 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		}
 		hits = append(hits, Hit{Address: c.h.Address, Title: title, Site: m.site, Tier: m.tier, Snippet: snip, Anchor: anchor, Pinned: m.pinned})
 	}
-	return hits, facets, nil
+	return hits, total, facets, nil
 }
 
 // snippetWords is the length of a snippet window.

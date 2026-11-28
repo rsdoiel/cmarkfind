@@ -52,16 +52,16 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 73
 : The corpus file or its directory, or an index's directory, cannot be created;
   completion's script or its directory cannot be created, or a file cmarkfind did
-  not write is in the way; indexer add of a name that is already a set.
+  not write is in the way; indexer add of a name that is already a set; server on a port that is in use.
 
 74
-: A read or write failed part way: completion's startup file.
+: A read or write failed part way: completion's startup file, or a server setting.
 
 75
 : The corpus is locked by another program; try again.
 
 77
-: The system refused access.
+: The system refused access, or the port server was asked for.
 
 78
 : The index folder (CMARKFIND_INDEX, or the folder beside the corpus) belongs to

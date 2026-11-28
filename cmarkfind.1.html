@@ -88,12 +88,23 @@ take the pin off. See cmarkfind-pin(7).
 <dd>
 Give a page your own tags, or take them off. See cmarkfind-tag(7).
 </dd>
-<dt>indexer build [SET] | indexer validate [SET] | indexer [list]
-[SET]</dt>
+</dl>
+<p>indexer build [SET] | indexer validate [SET] | indexer [list] [SET]
+indexer discover SITE | indexer add [-reference] SITE | indexer refresh
+[SET] : Write the search index of each set that needs one (or of SET),
+check one, or say what one holds. The indexes are kept in
+CMARKFIND_INDEX, else an index folder beside the corpus. discover finds
+the index a site publishes, add keeps a copy of it (or, with -reference,
+only its manifest) as a set, and refresh reads its manifest again. See
+cmarkfind-indexer(7).</p>
+<dl>
+<dt>server | server port N | server set NAME VALUE | server show</dt>
 <dd>
-Write the search index of each set that needs one (or of SET), check
-one, or say what one holds. The indexes are kept in CMARKFIND_INDEX,
-else an index folder beside the corpus. See cmarkfind-indexer(7).
+Run a search service for this machine only (127.0.0.1): Markdown, HTML
+and JSON results with paging, an OpenSearch description for a browser’s
+search box, and, unless turned off, version, stats and the list of sets.
+port N runs it once on one port; set and show keep its settings (port,
+concurrency, results, css, info) in the corpus. See cmarkfind-server(7).
 </dd>
 <dt>stats <a href="#options">OPTIONS</a></dt>
 <dd>
@@ -221,11 +232,12 @@ cmarkfind exclude https://example.org/drafts/
 cmarkfind forget ~/Sites/example.org</code></pre>
 <h1 id="see-also">SEE ALSO</h1>
 <p>cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-search-set(7),
-cmarkfind-set(7), cmarkfind-indexer(7), cmarkfind-stats(7),
-cmarkfind-forget(7), cmarkfind-exclude(7), cmarkfind-unexclude(7),
-cmarkfind-pin(7), cmarkfind-unpin(7), cmarkfind-tag(7),
-cmarkfind-untag(7), cmarkfind-verbs(7), cmarkfind-completion(7),
-cmarkfind-query(7), cmarkfind-corpus(7), cmarkfind-exit-status(7)</p>
+cmarkfind-set(7), cmarkfind-indexer(7), cmarkfind-server(7),
+cmarkfind-stats(7), cmarkfind-forget(7), cmarkfind-exclude(7),
+cmarkfind-unexclude(7), cmarkfind-pin(7), cmarkfind-unpin(7),
+cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-verbs(7),
+cmarkfind-completion(7), cmarkfind-query(7), cmarkfind-corpus(7),
+cmarkfind-exit-status(7)</p>
 <p>markdownweb, cmarkbrowser, BonBon (Dave Winer)</p>
 </section>
 <footer>

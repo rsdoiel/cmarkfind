@@ -73,6 +73,7 @@ func verbSpecs() []verbSpec {
 		{Name: "search-set", run: (*out).searchSet},
 		{Name: "set", Subverbs: []string{"list", "show", "ignore", "unignore", "fields"}, run: (*out).set},
 		{Name: "indexer", Subverbs: []string{"build", "validate", "list", "discover", "add", "refresh"}, run: (*out).indexer},
+		{Name: "server", Subverbs: []string{"port", "set", "show"}, run: (*out).serverVerb},
 		{Name: "stats", run: (*out).stats},
 		{Name: "forget", run: (*out).forget},
 		{Name: "exclude", run: (*out).exclude},

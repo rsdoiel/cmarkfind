@@ -216,6 +216,9 @@ func TestAFacetLinkResolvedAgainstItsPageIsTheSameEndpointAndFormatAndFindsTheCo
 			if !strings.HasPrefix(l, "?q=") {
 				continue
 			}
+			if lu, _ := url.Parse(l); lu.Query().Get("q") == "tomatoes" {
+				continue // Previous and Next: the same query, another page; a facet adds a clause
+			}
 			target := resolve(t, e, tc.path[:strings.Index(tc.path, "?")], l)
 			u, _ := url.Parse(target)
 			if u.Path != tc.path[:strings.Index(tc.path, "?")] {

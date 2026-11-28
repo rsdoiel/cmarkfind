@@ -84,9 +84,19 @@ tag ADDRESS TAG... | tag -list [ADDRESS], untag ADDRESS TAG...
 : Give a page your own tags, or take them off. See cmarkfind-tag(7).
 
 indexer build [SET] | indexer validate [SET] | indexer [list] [SET]
+indexer discover SITE | indexer add [-reference] SITE | indexer refresh [SET]
 : Write the search index of each set that needs one (or of SET), check one, or
   say what one holds. The indexes are kept in CMARKFIND_INDEX, else an index
-  folder beside the corpus. See cmarkfind-indexer(7).
+  folder beside the corpus. discover finds the index a site publishes, add keeps
+  a copy of it (or, with -reference, only its manifest) as a set, and refresh
+  reads its manifest again. See cmarkfind-indexer(7).
+
+server | server port N | server set NAME VALUE | server show
+: Run a search service for this machine only (127.0.0.1): Markdown, HTML and
+  JSON results with paging, an OpenSearch description for a browser's search
+  box, and, unless turned off, version, stats and the list of sets. port N runs
+  it once on one port; set and show keep its settings (port, concurrency,
+  results, css, info) in the corpus. See cmarkfind-server(7).
 
 stats [OPTIONS]
 : Say what the corpus holds: pages, pages gone, counts by site and tier, the
@@ -193,7 +203,7 @@ help [TOPIC]
 
 # SEE ALSO
 
-cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-search-set(7), cmarkfind-set(7), cmarkfind-indexer(7), cmarkfind-stats(7), cmarkfind-forget(7),
+cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-search-set(7), cmarkfind-set(7), cmarkfind-indexer(7), cmarkfind-server(7), cmarkfind-stats(7), cmarkfind-forget(7),
 cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-pin(7),
 cmarkfind-unpin(7), cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-verbs(7),
 cmarkfind-completion(7), cmarkfind-query(7),

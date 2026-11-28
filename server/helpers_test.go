@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -209,20 +210,22 @@ func must(t *testing.T, r resp, status int) resp {
 var mdLink = regexp.MustCompile(`\]\(([^)\s]*)\)`)
 var htmlHref = regexp.MustCompile(`href="([^"]*)"`)
 
-// linksOf are the link targets of a Markdown or HTML body.
+// linksOf are the link targets of a Markdown or HTML body. An HTML page is read
+// for its href attributes only, a Markdown page for ](target) with the escaped
+// brackets (\[ and \]) taken out first, since those are text and not links.
 func linksOf(body string) []string {
 	var out []string
+	if strings.HasPrefix(body, "<!doctype") {
+		for _, m := range htmlHref.FindAllStringSubmatch(body, -1) {
+			out = append(out, html.UnescapeString(m[1]))
+		}
+		return out
+	}
+	body = strings.NewReplacer(`\[`, "", `\]`, "").Replace(body)
 	for _, m := range mdLink.FindAllStringSubmatch(body, -1) {
 		out = append(out, m[1])
 	}
-	for _, m := range htmlHref.FindAllStringSubmatch(body, -1) {
-		out = append(out, unescapeHTML(m[1]))
-	}
 	return out
-}
-
-func unescapeHTML(s string) string {
-	return strings.NewReplacer("&amp;", "&", "&#34;", `"`, "&#39;", "'", "&lt;", "<", "&gt;", ">").Replace(s)
 }
 
 // resolve resolves a link against the address of the page it is on.

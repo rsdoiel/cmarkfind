@@ -242,6 +242,45 @@ excluded bound drops all of it, so <code>[2026-01 TO 2026-07}</code> is
 the first half of 2026. Each date field is queried under its own name;
 there is no page date and no fallback. <code>datecreated</code> joins
 the default date field names.</li>
+<li><strong>Published indexes</strong> (<code>indexer discover</code>,
+<code>add</code>, <code>refresh</code>): a site that publishes an index
+(a folder holding <code>manifest.json</code>, at
+<code>/cmarkfind/</code> or where its
+<code>/.well-known/cmarkfind.json</code> says) can be searched without
+reading its pages. <code>indexer discover SITE</code> reports where it
+is; <code>indexer add SITE</code> keeps a verified copy as a
+<strong>mirror</strong> set that searches offline, and
+<code>indexer add -reference SITE</code> keeps only the manifest and
+fetches and checks the files at each search;
+<code>indexer refresh [SET]</code> reads the manifest again (a higher
+generation replaces, an equal one changes nothing, a lower one is
+refused, exit 65). Hits show the index’s own title and snippet and the
+tier <code>mirror</code> or <code>reference</code>; pins, tags and
+exclusions apply by address. A mirror or reference that cannot be read
+is left out of a search with a warning. <code>indexer list</code> shows
+each one’s manifest, generation and when it was last checked. Redirects
+of an index fetch may not leave the site. Exit 73 for <code>add</code>
+of a name that is already a set, 1 for <code>fill</code> of a site held
+as a mirror or reference.</li>
+<li><strong><code>server</code></strong>: a search service for this
+machine only (127.0.0.1, port 8900 unless set). <code>/search</code>
+answers as Markdown, HTML (<code>.html</code>) or JSON
+(<code>.json</code>, or by <code>Accept</code>) with <code>q</code>,
+<code>set</code>, <code>count</code> and <code>startIndex</code>, and
+says how many hits matched in all, where the page starts and how many it
+holds, with links to the pages before and after.
+<code>/opensearch.xml</code> is an OpenSearch description a browser can
+build a search box from; <code>/version</code>, <code>/stats</code> and
+<code>/sets</code> say what is running, unless the <code>info</code>
+setting is off. It answers only requests made for localhost or 127.0.0.1
+with its own port, refuses requests another web page made, sends no CORS
+header, is read-only and never builds an index (a set with none is left
+out, and <code>server</code> says so on start).
+<code>server port N</code> runs it once on a port (0 is a free one),
+<code>server set NAME VALUE</code> stores a setting in the corpus (port,
+concurrency, results, css, info) and <code>server show</code> lists
+them. New exit codes for it: 73 for a port in use, 77 for a port the
+system refuses.</li>
 </ul>
 <h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>

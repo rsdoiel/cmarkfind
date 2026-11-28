@@ -34,7 +34,8 @@ Success.
 The answer is no: search or search-set found nothing, or every set is
 ignored; forget’s SITE or unexclude’s PREFIX had nothing to act on;
 robots.txt forbids the table of contents; completion -uninstall found
-nothing, or -check found a problem.
+nothing, or -check found a problem; indexer discover found no published
+index; fill of a site whose set is a mirror or reference.
 </dd>
 <dt>2</dt>
 <dd>
@@ -47,13 +48,15 @@ of one host).
 <dd>
 The file is not a corpus or has a newer schema; a source is malformed;
 an index is damaged (a file does not match its digest, or the manifest
-is wrong).
+is wrong); a site’s cmarkfind.json is wrong; an index to add or mirror
+fails verification; a published index has a lower generation than the
+one held (a rollback).
 </dd>
 <dt>66</dt>
 <dd>
 A folder, the corpus (for search and stats) or a table of contents is
 missing; a set is not known; an index is missing (no manifest.json in
-its folder).
+its folder), or a site publishes none (indexer add).
 </dd>
 <dt>69</dt>
 <dd>
@@ -67,11 +70,13 @@ A bug.
 <dd>
 The corpus file or its directory, or an index’s directory, cannot be
 created; completion’s script or its directory cannot be created, or a
-file cmarkfind did not write is in the way.
+file cmarkfind did not write is in the way; indexer add of a name that
+is already a set; server on a port that is in use.
 </dd>
 <dt>74</dt>
 <dd>
-A read or write failed part way: completion’s startup file.
+A read or write failed part way: completion’s startup file, or a server
+setting.
 </dd>
 <dt>75</dt>
 <dd>
@@ -79,7 +84,7 @@ The corpus is locked by another program; try again.
 </dd>
 <dt>77</dt>
 <dd>
-The system refused access.
+The system refused access, or the port server was asked for.
 </dd>
 <dt>78</dt>
 <dd>

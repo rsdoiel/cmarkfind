@@ -17,6 +17,7 @@ import (
 
 	"github.com/rsdoiel/cmarkfind"
 	"github.com/rsdoiel/cmarkfind/corpus"
+	"github.com/rsdoiel/cmarkfind/internal/render"
 	"github.com/rsdoiel/markdownweb/fetch"
 	"github.com/rsdoiel/markdownweb/toc"
 )
@@ -40,7 +41,6 @@ func DefaultDB() string { return corpus.DefaultPath() }
 type out struct {
 	stdout, stderr io.Writer
 	json           bool
-	hitIndent      string        // spaces before each hit's list item, when the hits are nested under Results
 	probing        bool          // verbFlags: stop at parse and keep the FlagSet
 	probed         *flag.FlagSet // the FlagSet parse was asked to read
 }
@@ -449,36 +449,10 @@ func (o *out) runSearch(ctx context.Context, dbFile string, args []string, verb 
 	}
 	filtered := len(tags) > 0 || *pinned
 	if o.json {
-		hits := make([]map[string]any, 0, len(res.Hits))
-		for _, h := range res.Hits {
-			ts := h.Tags
-			if ts == nil {
-				ts = []string{}
-			}
-			hits = append(hits, map[string]any{"address": h.Address, "title": h.Title, "site": h.Site, "tier": h.Tier, "snippet": h.Snippet, "anchor": h.Anchor, "pinned": h.Pinned, "tags": ts})
-		}
-		m := map[string]any{"hits": hits, "searched": res.Searched, "pending": res.Pending, "facets": facetsJSON(res.Facets)}
-		if filtered {
-			m["filtered"] = res.Filtered
-		}
-		b, _ := json.Marshal(m)
+		b, _ := json.Marshal(render.JSON(res, filtered))
 		fmt.Fprintf(o.stdout, "%s\n", b)
 	} else {
-		if len(res.Facets) > 0 { // facets, when a set defines them and the result has values, come before the results
-			o.writeFacets(res.Facets, setName)
-			fmt.Fprintf(o.stdout, "- Results\n")
-			o.hitIndent = "  "
-		}
-		for _, h := range res.Hits {
-			detail := h.Tier
-			if h.Pinned {
-				detail += ", pinned"
-			}
-			if len(h.Tags) > 0 {
-				detail += ", tags: " + mdText(strings.Join(h.Tags, " "))
-			}
-			o.writeHit(h.Title, h.Address, h.Anchor, mdText(detail), mdSnippet(h.Snippet))
-		}
+		render.Body(o.stdout, res, setName)
 		n := len(res.Hits)
 		more := ""
 		if filtered {

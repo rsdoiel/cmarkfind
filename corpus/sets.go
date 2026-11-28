@@ -547,8 +547,20 @@ func (d *DB) noteBuild(rep *index.BuildReport, words []string, previous string) 
 // currentSet opens a set's index, building it first when the folder holds none
 // or the one there is not the one this corpus last built.
 func (d *DB) currentSet(ctx context.Context, site string) (*index.Index, error) {
-	if err := d.claim(ctx); err != nil {
-		return nil, err
+	return d.currentSetOpt(ctx, site, false)
+}
+
+// currentSetOpt is currentSet; with noBuild it writes nothing and a set that
+// would need a build is ErrNeedsBuild.
+func (d *DB) currentSetOpt(ctx context.Context, site string, noBuild bool) (*index.Index, error) {
+	var claimErr error
+	if noBuild {
+		claimErr = d.checkOwner(ctx)
+	} else {
+		claimErr = d.claim(ctx)
+	}
+	if claimErr != nil {
+		return nil, claimErr
 	}
 	var gen int
 	var source string
@@ -570,6 +582,9 @@ func (d *DB) currentSet(ctx context.Context, site string) (*index.Index, error) 
 		// an index fetched from elsewhere in a word rule this program lacks is
 		// not ours to rebuild
 		return nil, fmt.Errorf("%s: %w", site, oerr)
+	}
+	if noBuild {
+		return nil, fmt.Errorf("%w: %s", ErrNeedsBuild, site)
 	}
 	ix, _, err = d.buildSet(ctx, site, 0, true)
 	return ix, err

@@ -17,7 +17,7 @@ func specNames() []string {
 }
 
 func TestTheRegistryNamesEveryVerb(t *testing.T) {
-	want := "completion exclude fill forget help indexer pin search search-set set stats tag unexclude unpin untag verbs"
+	want := "completion exclude fill forget help indexer pin search search-set server set stats tag unexclude unpin untag verbs"
 	got := specNames()
 	sort.Strings(got)
 	if strings.Join(got, " ") != want {

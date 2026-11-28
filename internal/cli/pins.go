@@ -4,22 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-	"unicode"
 
 	"github.com/rsdoiel/cmarkfind/corpus"
 )
-
-// clean makes page text safe to print on a terminal: a control character
-// becomes its \u escape, so a hostile title cannot send an escape sequence.
-func clean(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, s)
-}
 
 func (o *out) pin(ctx context.Context, dbFile string, args []string) error {
 	fset, j := flags("pin", o)
