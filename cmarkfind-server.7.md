@@ -35,7 +35,18 @@ on standard error when it starts; run cmarkfind indexer build.
 
 The addresses: / is a small search page; /search is the search; /opensearch.xml
 describes the search for a browser, which can build a search box from it. The
-The
+description is OpenSearch 1.1: one Url for each of Markdown, HTML and JSON, whose
+templates take {searchTerms} and the optional {count?} and {startIndex?}, so a
+client uses the one for the format it reads. A browser finds it from the link in
+the head of every HTML page. A client that reads Markdown or JSON has no head to
+look in, so every response, errors included, also carries the header
+
+    Link: </opensearch.xml>; rel="search"; type="application/opensearchdescription+xml"; title="cmarkfind"
+
+with a relative target, which names the description at the address the client
+already used. A program that asks for Markdown can read the header from any
+answer (a HEAD request will do), fetch the description, and build a search from
+the Markdown Url in it. The
 search, and the pages below, come in three formats: Markdown (the default), HTML
 (a .html suffix, or Accept: text/html) and JSON (.json, or Accept:
 application/json). A suffix picks the format unless the client's Accept does not

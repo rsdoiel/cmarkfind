@@ -220,9 +220,16 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 
+// descriptionLink names the OpenSearch description in a Link header, so a client
+// that asks for Markdown, which has no head to carry a <link>, still learns that
+// search is here and where its description is (DR-0018 item 6). The target is
+// relative: it is the description at the address the client already reached.
+const descriptionLink = `</opensearch.xml>; rel="search"; type="application/opensearchdescription+xml"; title="cmarkfind"`
+
 // setHeaders are on every response, errors included (item 9).
 func setHeaders(w http.ResponseWriter) {
 	h := w.Header()
+	h.Set("Link", descriptionLink)
 	h.Set("Cache-Control", "no-store")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")

@@ -37,14 +37,24 @@ left out of searches, and server says how many on standard error when it
 starts; run cmarkfind indexer build.</p>
 <p>The addresses: / is a small search page; /search is the search;
 /opensearch.xml describes the search for a browser, which can build a
-search box from it. The The search, and the pages below, come in three
-formats: Markdown (the default), HTML (a .html suffix, or Accept:
-text/html) and JSON (.json, or Accept: application/json). A suffix picks
-the format unless the client’s Accept does not accept it at all: a
-client that asks only for text/markdown, as BonBon does, gets Markdown
-at /search.html, and a browser, whose Accept includes <em>/</em>, gets
-the HTML. The page /search.html has a form and a link a browser reads to
-find the description.</p>
+search box from it. The description is OpenSearch 1.1: one Url for each
+of Markdown, HTML and JSON, whose templates take {searchTerms} and the
+optional {count?} and {startIndex?}, so a client uses the one for the
+format it reads. A browser finds it from the link in the head of every
+HTML page. A client that reads Markdown or JSON has no head to look in,
+so every response, errors included, also carries the header</p>
+<pre><code>Link: &lt;/opensearch.xml&gt;; rel=&quot;search&quot;; type=&quot;application/opensearchdescription+xml&quot;; title=&quot;cmarkfind&quot;</code></pre>
+<p>with a relative target, which names the description at the address
+the client already used. A program that asks for Markdown can read the
+header from any answer (a HEAD request will do), fetch the description,
+and build a search from the Markdown Url in it. The search, and the
+pages below, come in three formats: Markdown (the default), HTML (a
+.html suffix, or Accept: text/html) and JSON (.json, or Accept:
+application/json). A suffix picks the format unless the client’s Accept
+does not accept it at all: a client that asks only for text/markdown, as
+BonBon does, gets Markdown at /search.html, and a browser, whose Accept
+includes <em>/</em>, gets the HTML. The page /search.html has a form and
+a link a browser reads to find the description.</p>
 <p>/search takes q (the query, as cmarkfind-query(7) describes, at most
 1,024 bytes), set (one set, by a name set list shows, else every set not
 ignored), count (hits on a page, 1 to the results setting, which is the

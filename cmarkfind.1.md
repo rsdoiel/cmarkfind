@@ -85,7 +85,8 @@ indexer discover SITE | indexer add [-reference] SITE | indexer refresh [SET]
 server | server port N | server set NAME VALUE | server show
 : Run a search service for this machine only (127.0.0.1): Markdown, HTML and
   JSON results with paging, an OpenSearch description for a browser's search
-  box, and, unless turned off, version, stats and the list of sets. port N runs
+  box (named by a Link header on every response, for clients that read
+  Markdown), and, unless turned off, version, stats and the list of sets. port N runs
   it once on one port; set and show keep its settings (port, concurrency,
   results, css, info) in the corpus. See cmarkfind-server(7).
 

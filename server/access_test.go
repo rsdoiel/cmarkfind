@@ -1,8 +1,10 @@
 package server_test
 
 import (
+	"encoding/xml"
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -230,5 +232,68 @@ func TestTheRootIsTheSearchPageAndSoIsASearchWithNoQuery(t *testing.T) {
 	}
 	if got := e.get("/index.json").status; got != 404 && got != 406 {
 		t.Errorf("/index.json: %d, want 404 or 406", got)
+	}
+}
+
+// ---- discovery: the Link header ------------------------------------------------------
+
+const linkValue = `</opensearch.xml>; rel="search"; type="application/opensearchdescription+xml"; title="cmarkfind"`
+
+func TestEveryResponseNamesTheDescriptionInALinkHeader(t *testing.T) {
+	e := started(t)
+	for _, tc := range []struct {
+		method, path string
+		hdr          []string
+	}{
+		{"GET", "/search?q=tomatoes", nil}, {"GET", "/search.html?q=tomatoes", nil}, {"GET", "/search.json?q=tomatoes", nil},
+		{"GET", "/", nil}, {"GET", "/index.html", nil}, {"GET", "/version", nil}, {"GET", "/stats.json", nil}, {"GET", "/sets.html", nil},
+		{"GET", "/opensearch.xml", nil}, {"HEAD", "/search?q=tomatoes", nil}, {"HEAD", "/", nil},
+		{"GET", "/search?q=tomatoes", []string{"Accept", "text/markdown, text/x-opml"}}, // BonBon's own
+		{"GET", "/search?q=" + strings.Repeat("a", 1025), nil},                          // 400
+		{"GET", "/nothing", nil},                                 // 404
+		{"POST", "/search", nil},                                 // 405
+		{"GET", "/search", []string{"Accept", "image/png"}},      // 406
+		{"GET", "/search?q=x", []string{"Host", "evil.example"}}, // 403
+	} {
+		r := e.do(tc.method, tc.path, tc.hdr...)
+		if got := r.header.Values("Link"); len(got) != 1 || got[0] != linkValue {
+			t.Errorf("%s %s (%d): Link is %q, want exactly %q", tc.method, tc.path, r.status, got, linkValue)
+		}
+	}
+}
+
+// A client reads the header from any answer, resolves its target against the
+// address it asked, and finds the description there.
+func TestTheLinkHeaderLeadsAMarkdownClientToTheDescriptionItCanUse(t *testing.T) {
+	e := started(t)
+	bonbon := []string{"Accept", "text/markdown, text/x-opml"}
+	page := must(t, e.get("/search?q=tomatoes", bonbon...), 200)
+	if !strings.HasPrefix(page.header.Get("Content-Type"), "text/markdown") {
+		t.Fatalf("a Markdown client got %q", page.header.Get("Content-Type"))
+	}
+	link := page.header.Get("Link")
+	target := link[strings.Index(link, "<")+1 : strings.Index(link, ">")]
+	for _, part := range []string{`rel="search"`, `type="application/opensearchdescription+xml"`} {
+		if !strings.Contains(link, part) {
+			t.Errorf("Link %q lacks %s", link, part)
+		}
+	}
+	u, err := url.Parse(target)
+	if err != nil || u.IsAbs() {
+		t.Fatalf("the target %q should be a relative reference", target)
+	}
+	desc := must(t, e.get(strings.TrimPrefix(resolve(t, e, "/search", target), e.base()), bonbon...), 200)
+	if !strings.HasPrefix(desc.header.Get("Content-Type"), "application/opensearchdescription+xml") {
+		t.Errorf("the linked description is %q", desc.header.Get("Content-Type"))
+	}
+	var d osd
+	if err := xml.Unmarshal([]byte(desc.body), &d); err != nil || len(d.Urls) == 0 || d.Urls[0].Type != "text/markdown" {
+		t.Errorf("the linked description is not the one a Markdown client can use: %v\n%.300s", err, desc.body)
+	}
+	// from the template the client can search, and gets Markdown
+	tmpl := strings.NewReplacer("{searchTerms}", "tomatoes", "{count?}", "", "{startIndex?}", "").Replace(d.Urls[0].Template)
+	found := must(t, e.get(strings.TrimPrefix(tmpl, e.base()), bonbon...), 200)
+	if !strings.HasPrefix(found.header.Get("Content-Type"), "text/markdown") || !strings.Contains(found.body, "Hits 1 to 100 of 250") {
+		t.Errorf("searching by the template: %q\n%.200s", found.header.Get("Content-Type"), found.body)
 	}
 }
