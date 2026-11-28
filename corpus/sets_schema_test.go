@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// A schema 5 file has no sets table. Opening it brings it to schema 6 in place:
+// A schema 5 file has no sets table (and no meta column). Opening it brings it to schema 7 in place:
 // every page, pin, tag, exclusion and site row is kept, and the sets table is
 // there for the next fill to use.
 func TestAVersion5FileUpgradesInPlaceToSchema6KeepingEveryRow(t *testing.T) {
@@ -34,13 +34,13 @@ func TestAVersion5FileUpgradesInPlaceToSchema6KeepingEveryRow(t *testing.T) {
 		t.Fatalf("open schema 5: %v", err)
 	}
 	defer db2.Close()
-	if SchemaVersion != 6 {
-		t.Errorf("SchemaVersion = %d, want 6", SchemaVersion)
+	if SchemaVersion != 7 {
+		t.Errorf("SchemaVersion = %d, want 7", SchemaVersion)
 	}
 	var v string
 	db2.sql.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&v)
-	if v != strconv.Itoa(6) {
-		t.Errorf("schema_version = %q, want 6", v)
+	if v != strconv.Itoa(7) {
+		t.Errorf("schema_version = %q, want 7", v)
 	}
 	tb := tables(t, path)
 	for _, want := range []string{"sets", "collections"} {

@@ -483,22 +483,121 @@ func TestAnIgnoredSetSurvivesAFillOfItsSite(t *testing.T) {
 
 // ---- the field mapping, until Phase 6 ---------------------------------------------------
 
-func TestSetFieldsShowsDefaultAndResetIsAccepted(t *testing.T) {
+func TestSetFieldsShowsTheEffectiveMappingOneFieldPerLine(t *testing.T) {
 	db, a, _ := twoSets(t)
 	r := do(t, "-db", db, "set", "fields", a)
-	if r.code != 0 || !strings.Contains(r.out, "default") {
-		t.Errorf("set fields: %+v", r)
+	if r.code != 0 {
+		t.Fatalf("%+v", r)
 	}
-	if r := do(t, "-db", db, "set", "fields", "-reset", a); r.code != 0 {
-		t.Errorf("set fields -reset: %+v", r)
+	got := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(r.out), "\n") {
+		f := strings.Fields(line)
+		if len(f) != 2 {
+			t.Fatalf("a line is a field and its roles: %q", line)
+		}
+		got[f[0]] = f[1]
 	}
-	j := parseJSON(t, do(t, "-db", db, "set", "show", "-json", a).out)
-	if j["fields"] != "default" {
+	for field, want := range map[string]string{
+		"title": "built-in", "body": "built-in", "keywords": "facet,fielded", "author": "facet,fielded", "datepublished": "date",
+	} {
+		if got[field] != want {
+			t.Errorf("%s = %q, want %q", field, got[field], want)
+		}
+	}
+	if _, ok := got["tags"]; ok {
+		t.Error("tags is not mapped by default")
+	}
+	j := parseJSON(t, do(t, "-db", db, "set", "fields", "-json", a).out)
+	fields, _ := j["fields"].(map[string]any)
+	if roles, _ := fields["author"].([]any); len(roles) != 2 || roles[0] != "facet" || roles[1] != "fielded" {
+		t.Errorf("json fields %v", j["fields"])
+	}
+	if j := parseJSON(t, do(t, "-db", db, "set", "show", "-json", a).out); j["fields"] != "default" {
 		t.Errorf("set show fields = %v", j["fields"])
 	}
-	// assigning waits for Phase 6
-	if r := do(t, "-db", db, "set", "fields", a, "author=facet"); r.code != 2 {
-		t.Errorf("assignment must be a usage error until the roles exist: %+v", r)
+}
+
+func TestSetFieldsAssignsRolesRemovesAFieldAndResets(t *testing.T) {
+	db, a, _ := twoSets(t)
+	r := do(t, "-db", db, "set", "fields", a, "tags=facet,fielded", "keywords=none", "author=text")
+	if r.code != 0 {
+		t.Fatalf("assign: %+v", r)
+	}
+	out := do(t, "-db", db, "set", "fields", a).out
+	for _, want := range []string{"tags facet,fielded", "author text"} {
+		if !strings.Contains(strings.Join(strings.Fields(out), " "), want) {
+			t.Errorf("the mapping lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "keywords") {
+		t.Errorf("keywords=none left it mapped:\n%s", out)
+	}
+	if j := parseJSON(t, do(t, "-db", db, "set", "show", "-json", a).out); j["fields"] != "custom" {
+		t.Errorf("set show fields = %v", j["fields"])
+	}
+	if r := do(t, "-db", db, "set", "fields", "-reset", a); r.code != 0 || !strings.Contains(r.out, "keywords") {
+		t.Errorf("reset: %+v", r)
+	}
+	if j := parseJSON(t, do(t, "-db", db, "set", "show", "-json", a).out); j["fields"] != "default" {
+		t.Errorf("after reset fields = %v", j["fields"])
+	}
+}
+
+func TestABadAssignmentIsExit2AndAnUnknownSetIs66(t *testing.T) {
+	db, a, _ := twoSets(t)
+	for _, args := range [][]string{
+		{"set", "fields", a, "author=facets"},
+		{"set", "fields", a, "title=facet"},
+		{"set", "fields", a, "author"},
+		{"set", "fields", a, "bad name=facet"},
+		{"set", "fields", "-reset", a, "author=facet"},
+	} {
+		if r := do(t, append([]string{"-db", db}, args...)...); r.code != 2 {
+			t.Errorf("%v: %+v", args, r)
+		}
+	}
+	if r := do(t, "-db", db, "set", "fields", "nowhere.example", "author=facet"); r.code != 66 {
+		t.Errorf("unknown set: %+v", r)
+	}
+	r := do(t, "-db", db, "set", "fields", "-json", a, "author=facets")
+	if j := parseJSON(t, r.out); r.code != 2 || j["class"] != "usage" {
+		t.Errorf("json error: %+v", r)
+	}
+}
+
+func TestAChangedMappingMakesTheNextBuildReplaceThatSetsIndex(t *testing.T) {
+	db, a, b := twoSets(t)
+	ma, mb := manifest(t, setIndexDir(t, db, a)), manifest(t, setIndexDir(t, db, b))
+	if r := do(t, "-db", db, "set", "fields", a, "tags=facet"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	if r := do(t, "-db", db, "indexer", "build"); !strings.Contains(r.out, "built 1, unchanged 1") {
+		t.Errorf("%+v", r)
+	}
+	if manifest(t, setIndexDir(t, db, a)) == ma || manifest(t, setIndexDir(t, db, b)) != mb {
+		t.Error("only the changed set's index is replaced")
+	}
+}
+
+func TestAnUnparsableDateIsAWarningOnFillAndTheExitIs0(t *testing.T) {
+	t.Setenv("CMARKFIND_INDEX", "")
+	root := hostSite(t, "d.example", map[string]string{
+		"ok.md":  "---\ndate: 2026-11-27\n---\nzebra fine\n",
+		"bad.md": "---\ndate: tomorrow-ish\n---\nzebra odd\n",
+	})
+	db := dbPath(t)
+	r := do(t, "-db", db, "fill", root)
+	if r.code != 0 || !strings.Contains(r.out, "added 2") {
+		t.Fatalf("%+v", r)
+	}
+	if !strings.Contains(r.errOut, "warning:") || !strings.Contains(r.errOut, "https://d.example/bad.md") || !strings.Contains(r.errOut, "tomorrow-ish") || strings.Contains(r.errOut, "ok.md") {
+		t.Errorf("warnings: %q", r.errOut)
+	}
+	if r := do(t, "-db", db, "search", "zebra"); r.code != 0 {
+		t.Errorf("both pages are found by their text: %+v", r)
+	}
+	if r := do(t, "-db", db, "stats"); !strings.Contains(r.out, "schema 7") {
+		t.Errorf("schema: %q", r.out)
 	}
 }
 

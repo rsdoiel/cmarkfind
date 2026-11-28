@@ -260,7 +260,7 @@ func TestAVersion4FileUpgradesInPlaceDropsFTS5AndSearchesTheIndex(t *testing.T) 
 	}
 	var v string
 	db2.sql.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&v)
-	if v != "6" || SchemaVersion != 6 {
+	if v != "7" || SchemaVersion != 7 {
 		t.Errorf("schema_version %q, constant %d", v, SchemaVersion)
 	}
 }

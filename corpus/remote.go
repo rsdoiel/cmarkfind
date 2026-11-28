@@ -109,9 +109,9 @@ func (d *DB) fillRemoteWith(ctx context.Context, f *fetch.Fetcher, tocURL string
 	}
 
 	type item struct {
-		p                       toc.Page
-		exists, gone, asked     bool
-		hash, etag, lm, checked string
+		p                             toc.Page
+		exists, gone, asked           bool
+		hash, etag, lm, checked, meta string
 	}
 	var items []*item
 	for _, p := range l.Pages {
@@ -121,8 +121,8 @@ func (d *DB) fillRemoteWith(ctx context.Context, f *fetch.Fetcher, tocURL string
 		}
 		it := &item{p: p}
 		var goneAt string
-		err := d.sql.QueryRowContext(ctx, `SELECT hash, gone_at, etag, last_modified, checked_at FROM pages WHERE address = ?`, p.URL).
-			Scan(&it.hash, &goneAt, &it.etag, &it.lm, &it.checked)
+		err := d.sql.QueryRowContext(ctx, `SELECT hash, gone_at, etag, last_modified, checked_at, meta FROM pages WHERE address = ?`, p.URL).
+			Scan(&it.hash, &goneAt, &it.etag, &it.lm, &it.checked, &it.meta)
 		switch {
 		case err == nil:
 			it.exists, it.gone, it.asked = true, goneAt != "", true
@@ -189,7 +189,7 @@ ON CONFLICT(address) DO UPDATE SET checked_at = excluded.checked_at, site = excl
 		p := it.p
 		keep := it.exists && !it.gone // what "present" means if this page fails
 		var v fetch.Validators
-		if keep {
+		if keep && it.meta != "" { // a page whose front matter is not read yet is asked for in full
 			v = fetch.Validators{ETag: it.etag, LastModified: it.lm}
 		}
 		res, err := f.GetIf(ctx, p.URL, page.Accept, v)
@@ -252,7 +252,7 @@ ON CONFLICT(address) DO UPDATE SET checked_at = excluded.checked_at, site = excl
 		present[p.URL] = true
 		sum := sha256.Sum256(res.Body)
 		hash := hex.EncodeToString(sum[:])
-		if it.exists && it.hash == hash && !it.gone {
+		if it.exists && it.hash == hash && !it.gone && it.meta != "" {
 			rep.Unchanged++
 			if _, err := d.sql.ExecContext(ctx, `UPDATE pages SET etag = ?, last_modified = ?, checked_at = ? WHERE address = ?`,
 				res.ETag, res.LastModified, stamp(), p.URL); err != nil { // same text; new validators and a new check
@@ -271,8 +271,8 @@ ON CONFLICT(address) DO UPDATE SET checked_at = excluded.checked_at, site = excl
 		if pub == "" {
 			pub = metaStr(pg, "date")
 		}
-		if err := upsert(ctx, d.sql, stored{address: p.URL, site: tocURL, tier: "toc", title: title, desc: metaStr(pg, "description"),
-			pub: pub, body: pg.Body, hash: hash, etag: res.ETag, lastModified: res.LastModified, now: now, checked: stamp()}); err != nil {
+		if err := upsert(ctx, d.sql, stored{address: p.URL, site: tocURL, tier: "toc", title: title, desc: descriptionOf(pg),
+			pub: pub, body: pg.Body, hash: hash, etag: res.ETag, lastModified: res.LastModified, now: now, checked: stamp(), meta: metaJSON(pg)}); err != nil {
 			return rep, classify(err)
 		}
 		if _, err := d.sql.ExecContext(ctx, `DELETE FROM attempts WHERE address = ?`, p.URL); err != nil {

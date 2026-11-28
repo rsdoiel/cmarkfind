@@ -18,7 +18,7 @@ import (
 )
 
 // SchemaVersion is the schema this package reads and writes.
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 var (
 	// ErrSchema says the file is not a corpus this package can use: not a
@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS pages (
 	gone_at       TEXT NOT NULL DEFAULT '',
 	visited_first TEXT NOT NULL DEFAULT '',
 	visited_last  TEXT NOT NULL DEFAULT '',
-	came_from     TEXT NOT NULL DEFAULT ''
+	came_from     TEXT NOT NULL DEFAULT '',
+	meta          TEXT NOT NULL DEFAULT ''
 );
 `
 
@@ -141,11 +142,18 @@ func Open(path string) (*DB, error) {
 	return &DB{sql: raw, path: path}, nil
 }
 
-// upgrade takes a file from schema version from to SchemaVersion. Version 6
+// upgrade takes a file from schema version from to SchemaVersion. Version 7
+// adds pages.meta, the page's front matter as JSON (empty means not read yet; the
+// next fill reads such a page again). Version 6
 // adds the sets and collections tables (created with the schema above). Version 5
 // drops the FTS5 table and its triggers (search reads the index now); the next
 // search builds the index.
 func upgrade(raw *sql.DB, from int) error {
+	if from < 7 { // the front matter of each page; empty until the page is read again
+		if err := addColumn(raw, "pages", "meta", "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
 	tx, err := raw.Begin()
 	if err != nil {
 		return err

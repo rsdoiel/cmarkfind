@@ -100,9 +100,9 @@ func (o *out) setShow(ctx context.Context, dbFile string, args []string) error {
 		if s.Name != site {
 			continue
 		}
-		fields := s.Fields
-		if fields == "" {
-			fields = "default"
+		fields := "default"
+		if s.Fields != "" {
+			fields = "custom"
 		}
 		if o.json {
 			m := map[string]any{"name": s.Name, "source": s.Source, "pages": s.Pages, "ignored": s.Ignored,
@@ -155,49 +155,53 @@ func (o *out) setIgnore(ctx context.Context, dbFile string, args []string, ignor
 	return nil
 }
 
-// setFields shows a set's field mapping, or with -reset clears it. Assigning
-// roles to fields waits for the roles to be defined.
+// setFields shows how a set reads front matter, assigns roles to fields, or
+// with -reset returns the set to the default mapping.
 func (o *out) setFields(ctx context.Context, dbFile string, args []string) error {
 	fset, j := flags("set fields", o)
 	reset := fset.Bool("reset", false, "")
 	if err := parse(fset, args, o, j); err != nil {
 		return err
 	}
-	if fset.NArg() > 1 {
-		return fmt.Errorf("%w: set fields takes one SET; FIELD=ROLE assignments are not available yet", ErrUsage)
+	if fset.NArg() == 0 {
+		return fmt.Errorf("%w: set fields takes a SET", ErrUsage)
+	}
+	if *reset && fset.NArg() > 1 {
+		return fmt.Errorf("%w: -reset takes only a SET", ErrUsage)
 	}
 	db, err := openExisting(dbFile)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	site, err := o.oneSet(ctx, db, "set fields", fset.Args())
+	site, err := db.ResolveSet(ctx, fset.Arg(0))
 	if err != nil {
 		return err
 	}
-	if *reset {
-		if err := db.SetFields(ctx, site, 0, ""); err != nil {
-			return err
-		}
+	switch {
+	case *reset:
+		err = db.SetFields(ctx, site, 0, "")
+	case fset.NArg() > 1:
+		err = db.AssignFields(ctx, site, fset.Args()[1:])
 	}
-	sets, err := db.Sets(ctx)
 	if err != nil {
 		return err
 	}
-	for _, s := range sets {
-		if s.Name != site {
-			continue
+	m, err := db.FieldMapping(ctx, site)
+	if err != nil {
+		return err
+	}
+	if o.json {
+		fields := map[string][]string{}
+		for _, f := range m.Fields() {
+			fields[f] = m.Roles(f)
 		}
-		fields := s.Fields
-		if fields == "" {
-			fields = "default"
-		}
-		if o.json {
-			b, _ := json.Marshal(map[string]any{"name": s.Name, "fields": fields, "fields_version": s.FieldsVersion})
-			fmt.Fprintf(o.stdout, "%s\n", b)
-		} else {
-			fmt.Fprintf(o.stdout, "%s\n", fields)
-		}
+		b, _ := json.Marshal(map[string]any{"name": site, "fields": fields})
+		fmt.Fprintf(o.stdout, "%s\n", b)
+		return nil
+	}
+	for _, f := range m.Fields() {
+		fmt.Fprintf(o.stdout, "%-14s %s\n", f, strings.Join(m.Roles(f), ","))
 	}
 	return nil
 }

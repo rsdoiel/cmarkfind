@@ -191,8 +191,21 @@ folder. <code>set show</code> names a collection’s folder.</li>
 (an index fetched from elsewhere, from a later version) is left out of
 <code>search</code> with one warning, never mixed with the others;
 <code>search-set</code> on it exits 65. A set built here is simply
-rebuilt. ## v0.0.1, 2026-11-26</li>
+rebuilt.- Front matter is kept: each page’s YAML header is stored with
+it (schema version 7, <code>pages.meta</code>) and <code>abstract</code>
+stands for <code>description</code> when a page has none. A page stored
+before this is read again by the next fill (a web page is fetched once
+more, without <code>If-None-Match</code>).</li>
+<li><code>set fields SET</code> shows how a set reads front matter, a
+line for each field with its roles (<code>facet</code>,
+<code>fielded</code>, <code>date</code>, <code>text</code>);
+<code>set fields SET author=facet,fielded tags=facet keywords=none</code>
+sets them and <code>-reset</code> returns the set to the default. A
+change makes the next build replace the set’s index. A date field that
+holds something that is not a date is warned about, once for the page
+and field, and the page is left without it.</li>
 </ul>
+<h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>
 <ul>
 <li>The corpus: Markdown pages in one SQLite3 file, searched with FTS5

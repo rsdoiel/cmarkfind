@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -201,14 +202,14 @@ func (d *DB) storeLocal(ctx context.Context, abs string, l *toc.Listing, base *u
 		present[p.URL] = true
 		sum := sha256.Sum256([]byte(pg.Raw))
 		hash := hex.EncodeToString(sum[:])
-		var oldHash, oldGone string
-		err = tx.QueryRowContext(ctx, `SELECT hash, gone_at FROM pages WHERE address = ?`, p.URL).Scan(&oldHash, &oldGone)
+		var oldHash, oldGone, oldMeta string
+		err = tx.QueryRowContext(ctx, `SELECT hash, gone_at, meta FROM pages WHERE address = ?`, p.URL).Scan(&oldHash, &oldGone, &oldMeta)
 		exists := err == nil
-		if exists && oldHash == hash && oldGone == "" {
+		if exists && oldHash == hash && oldGone == "" && oldMeta != "" { // a page with no meta yet is read again
 			rep.Unchanged++
 			continue
 		}
-		title, desc, pub := pg.Title(), metaStr(pg, "description"), metaStr(pg, "pubDate")
+		title, desc, pub := pg.Title(), descriptionOf(pg), metaStr(pg, "pubDate")
 		if pub == "" {
 			pub = metaStr(pg, "date")
 		}
@@ -218,7 +219,7 @@ func (d *DB) storeLocal(ctx context.Context, abs string, l *toc.Listing, base *u
 		if title == "" {
 			title = p.Title
 		}
-		err = upsert(ctx, tx, stored{address: p.URL, site: abs, tier: "own", title: title, desc: desc, pub: pub, body: pg.Body, hash: hash, now: now, checked: stamp()})
+		err = upsert(ctx, tx, stored{address: p.URL, site: abs, tier: "own", title: title, desc: desc, pub: pub, body: pg.Body, hash: hash, now: now, checked: stamp(), meta: metaJSON(pg)})
 		if err != nil {
 			return nil, classify(err)
 		}
@@ -242,6 +243,67 @@ func (d *DB) storeLocal(ctx context.Context, abs string, l *toc.Listing, base *u
 		return nil, classify(err)
 	}
 	return rep, firstErr
+}
+
+// descriptionOf is the page's description, or its abstract when it has none.
+func descriptionOf(p *page.Page) string {
+	if d := metaStr(p, "description"); d != "" {
+		return d
+	}
+	return metaStr(p, "abstract")
+}
+
+// metaScalar is the text of one front matter value, "" for what is not a
+// scalar. A YAML date is its ISO 8601 text: the day alone when it has no time.
+func metaScalar(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	case time.Time:
+		if x.Hour() == 0 && x.Minute() == 0 && x.Second() == 0 && x.Nanosecond() == 0 {
+			return x.Format("2006-01-02")
+		}
+		return x.Format(time.RFC3339)
+	case map[string]any, map[any]any:
+		return ""
+	case []any:
+		return ""
+	}
+	return fmt.Sprint(v)
+}
+
+// metaJSON is a page's top-level front matter as one JSON object: a string stays
+// a string, a number, boolean or date is its text, a list is a list of such
+// texts, and anything deeper (a map, a list of maps) is dropped. A page with no
+// front matter is "{}", which is how the corpus tells it from "not read yet" ("").
+func metaJSON(p *page.Page) string {
+	out := map[string]any{}
+	for k, v := range p.Meta {
+		if list, ok := v.([]any); ok {
+			var items []string
+			for _, e := range list {
+				if t := metaScalar(e); t != "" {
+					items = append(items, t)
+				}
+			}
+			if len(items) > 0 {
+				out[k] = items
+			}
+			continue
+		}
+		if t := metaScalar(v); t != "" {
+			out[k] = t
+		}
+	}
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(out); err != nil {
+		return "{}"
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func metaStr(p *page.Page, key string) string {
@@ -270,18 +332,18 @@ type execer interface {
 
 // stored is a page as the corpus keeps it.
 type stored struct {
-	address, site, tier, title, desc, pub, body, hash, etag, lastModified, now, checked string
+	address, site, tier, title, desc, pub, body, hash, etag, lastModified, now, checked, meta string
 }
 
 // upsert writes a page, marking it present again if it had gone.
 func upsert(ctx context.Context, q execer, p stored) error {
 	_, err := q.ExecContext(ctx, `
-INSERT INTO pages(address, site, title, description, pub_date, body, hash, etag, last_modified, fetched_at, checked_at, tier, reader, gone_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '')
+INSERT INTO pages(address, site, title, description, pub_date, body, hash, etag, last_modified, fetched_at, checked_at, tier, reader, gone_at, meta)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?)
 ON CONFLICT(address) DO UPDATE SET site=excluded.site, title=excluded.title, description=excluded.description,
 	pub_date=excluded.pub_date, body=excluded.body, hash=excluded.hash, etag=excluded.etag,
-	last_modified=excluded.last_modified, fetched_at=excluded.fetched_at, checked_at=excluded.checked_at, tier=excluded.tier, reader=0, gone_at=''`,
-		p.address, p.site, p.title, p.desc, p.pub, p.body, p.hash, p.etag, p.lastModified, p.now, p.checked, p.tier)
+	last_modified=excluded.last_modified, fetched_at=excluded.fetched_at, checked_at=excluded.checked_at, tier=excluded.tier, reader=0, gone_at='', meta=excluded.meta`,
+		p.address, p.site, p.title, p.desc, p.pub, p.body, p.hash, p.etag, p.lastModified, p.now, p.checked, p.tier, p.meta)
 	return err
 }
 

@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -348,11 +349,11 @@ type SetBuild struct {
 	Unchanged int
 }
 
-type setPage struct{ address, title, description, body, hash string }
+type setPage struct{ address, title, description, body, hash, meta string }
 
 // setPages are a set's live pages that are not excluded, in address order.
 func (d *DB) setPages(ctx context.Context, site string, skip func(string) bool) ([]setPage, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT address, title, description, body, hash FROM pages WHERE site = ? AND gone_at = '' ORDER BY address`, site)
+	rows, err := d.sql.QueryContext(ctx, `SELECT address, title, description, body, hash, meta FROM pages WHERE site = ? AND gone_at = '' ORDER BY address`, site)
 	if err != nil {
 		return nil, classify(err)
 	}
@@ -360,7 +361,7 @@ func (d *DB) setPages(ctx context.Context, site string, skip func(string) bool) 
 	var out []setPage
 	for rows.Next() {
 		var p setPage
-		if err := rows.Scan(&p.address, &p.title, &p.description, &p.body, &p.hash); err != nil {
+		if err := rows.Scan(&p.address, &p.title, &p.description, &p.body, &p.hash, &p.meta); err != nil {
 			return nil, classify(err)
 		}
 		if !skip(p.address) {
@@ -376,7 +377,8 @@ func inputDigest(fieldsVersion int, fields string, pages []setPage) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s\n%d\n%s\n", index.Analyzer, fieldsVersion, fields)
 	for _, p := range pages {
-		fmt.Fprintf(h, "%s %s\n", p.address, p.hash)
+		m := sha256.Sum256([]byte(p.meta))
+		fmt.Fprintf(h, "%s %s %x\n", p.address, p.hash, m[:6])
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -495,6 +497,7 @@ func (d *DB) buildSet(ctx context.Context, site string, chunk int, force bool) (
 		return nil, false, classify(err)
 	}
 	d.noteBuild(rep, words, oldOnly)
+	d.noteDates(ctx, site, pages)
 	return ix, true, nil
 }
 
@@ -579,4 +582,64 @@ func inList(sites []string) (string, []any) {
 		args[i] = s
 	}
 	return "(" + strings.TrimSuffix(strings.Repeat("?,", len(sites)), ",") + ")", args
+}
+
+// noteDates queues a warning for each date a set's date fields hold that is not
+// a date, naming the page, the field and the text, and a count line. The page is
+// left with no value for that field and is still indexed by its text.
+func (d *DB) noteDates(ctx context.Context, site string, pages []setPage) {
+	m, err := d.FieldMapping(ctx, site)
+	if err != nil {
+		return
+	}
+	fields := m.DateFields()
+	var lines []string
+	for _, p := range pages {
+		if p.meta == "" || p.meta == "{}" {
+			continue
+		}
+		var fm map[string]any
+		if json.Unmarshal([]byte(p.meta), &fm) != nil {
+			continue
+		}
+		lower := map[string]any{}
+		for k, v := range fm {
+			lower[strings.ToLower(k)] = v
+		}
+		for _, f := range fields {
+			v, ok := lower[f]
+			if !ok {
+				continue
+			}
+			text := ""
+			switch x := v.(type) {
+			case string:
+				text = x
+			case []any:
+				if len(x) > 0 {
+					text, _ = x[0].(string)
+				}
+			}
+			if text == "" {
+				continue
+			}
+			if _, _, ok := index.ParseDay(text); !ok {
+				lines = append(lines, fmt.Sprintf("%s: field %s is not a date: %q", p.address, f, text))
+			}
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.warnings = append(d.warnings, lines...)
+	d.warnings = append(d.warnings, fmt.Sprintf("%d %s could not be read and %s left without a value", len(lines), plural1(len(lines), "date", "dates"), plural1(len(lines), "is", "are")))
+}
+
+func plural1(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

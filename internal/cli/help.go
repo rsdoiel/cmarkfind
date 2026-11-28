@@ -69,11 +69,11 @@ search-set [OPTIONS] SET QUERY...
 : Search one index set, ignored or not; options as search. See
   cmarkfind-search-set(7).
 
-set list | show SET | ignore SET | unignore SET | fields [-reset] SET
+set list | show SET | ignore SET | unignore SET | fields [-reset] SET [FIELD=ROLE...]
 : An index set is one instance of a site (an outline on the web, or a folder),
   made by fill and removed by forget, with an index of its own. list names the
   sets, show says what one holds, ignore leaves one out of search (search-set
-  still reaches it), fields shows how it reads front matter. See
+  still reaches it), fields shows or sets how it reads front matter. See
   cmarkfind-set(7).
 
 pin ADDRESS... | pin -list, unpin ADDRESS...

@@ -21,7 +21,7 @@ cmarkfind set ignore SET
 
 cmarkfind set unignore SET
 
-cmarkfind set fields [-reset] SET
+cmarkfind set fields [-reset] SET [FIELD=ROLE[,ROLE]...]...
 
 # DESCRIPTION
 
@@ -47,9 +47,21 @@ leaves a set out of search, so a near copy of a site you are not interested in
 does not fill a lookup with duplicates; search-set still reaches it. unignore
 puts it back. Nothing is ignored until you say so.
 
-fields shows how a set reads the front matter of its pages, "default" when it has
-no mapping of its own; -reset returns it to the default. A set's mapping
-changing makes its index out of date, and the next build replaces it.
+fields shows how a set reads the front matter of its pages (the YAML header of
+a Markdown file): one line for each field with its roles. title, description
+(with abstract as its alias) and body are built in. The default maps keywords
+and author as facet,fielded, and date, datepublished, datemodified, pubdate and
+created as date. Field names are lower case; a page's keys are matched without
+regard to case. FIELD=ROLE,ROLE sets a field's roles, FIELD=none (or FIELD=)
+turns a field off, even a default one, and -reset returns the set to the default.
+The roles are facet (the field's whole values can be counted and followed),
+fielded (field:word finds pages by the words of the field), date (the field is a
+date for ranges and the year), and text (the field's words are searched with the
+description). A page's front matter is kept when it is filled, so a page stored
+before this was read again on the next fill. A date that cannot be read (not
+YYYY, YYYY-MM, YYYY-MM-DD, or a day with a time) is warned about, once for the page
+and field, and the page is left without it. A set's mapping changing makes its
+index out of date, and the next build replaces it.
 
 Pins, tags and exclusions belong to the corpus and apply in every set.
 
@@ -63,7 +75,9 @@ Pins, tags and exclusions belong to the corpus and apply in every set.
 
 # EXIT STATUS
 
-66 when SET is not a set, 2 when it fits more than one or an argument is missing.
+66 when SET is not a set, 2 when it fits more than one, an argument is missing, or
+a role, a field name or an assignment is not usable (a built-in field cannot be
+mapped).
 list of a corpus with no sets is 0 and prints nothing. See
 cmarkfind-exit-status(7).
 
@@ -72,6 +86,7 @@ cmarkfind-exit-status(7).
     cmarkfind set list
     cmarkfind set ignore tortuga.local
     cmarkfind set show rsdoiel.github.io
+    cmarkfind set fields rsdoiel.github.io tags=facet,fielded keywords=none
 
 # SEE ALSO
 
