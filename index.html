@@ -20,8 +20,8 @@
 <h1 id="cmarkfind">cmarkfind</h1>
 <p>cmarkfind is a personal search engine for the Markdown web. It keeps
 the pages of the sites you read in one SQLite3 file and searches them
-locally with FTS5; nothing is sent anywhere by a search. It fills the
-file from a site’s table of contents
+locally through an index it builds from them; nothing is sent anywhere
+by a search. It fills the file from a site’s table of contents
 (<code>/.well-known/toc.opml</code>), from a folder on disk or over the
 web, using <a
 href="https://github.com/rsdoiel/markdownweb">markdownweb</a>. <a

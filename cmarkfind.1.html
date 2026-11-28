@@ -25,9 +25,10 @@
 <h1 id="description">DESCRIPTION</h1>
 <p>cmarkfind keeps a corpus of Markdown pages in one SQLite file and
 searches it locally. It fills the corpus from a site’s table of contents
-(/.well-known/toc.opml), from a folder on disk or over the web, and
-searches with SQLite’s FTS5 query language. Nothing is sent anywhere by
-a search.</p>
+(/.well-known/toc.opml), from a folder on disk or over the web, builds a
+search index from the pages after each fill, and searches that index
+with a Lucene-style query language. Nothing is sent anywhere by a
+search.</p>
 <h1 id="verbs">VERBS</h1>
 <dl>
 <dt>fill <a href="#options">OPTIONS</a> SOURCE</dt>
@@ -161,6 +162,11 @@ The corpus is locked by another program; try again.
 <dt>77</dt>
 <dd>
 The system refused access.
+</dd>
+<dt>78</dt>
+<dd>
+The index folder belongs to another corpus; give each corpus its own
+(CMARKFIND_INDEX).
 </dd>
 <dt>70</dt>
 <dd>
