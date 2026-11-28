@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/rsdoiel/cmarkfind/index"
 )
 
 // ErrBadFieldMapping says a role, a field name or an assignment is not usable
@@ -313,4 +315,85 @@ func (d *DB) AssignFields(ctx context.Context, site string, assignments []string
 		return err
 	}
 	return d.SetFields(ctx, site, 1, string(b))
+}
+
+// commaFields are the fields whose value, given as one string, is a list
+// separated by commas; any other field's string is one value.
+var commaFields = map[string]bool{"keywords": true, "tags": true}
+
+// specs lists what the index keeps of each mapped field with a facet, fielded
+// or date role, by name.
+func (m *Mapping) specs() []index.FieldSpec {
+	var out []index.FieldSpec
+	for name, roles := range m.roles {
+		s := index.FieldSpec{Name: name}
+		for _, r := range roles {
+			s.Facet = s.Facet || r == "facet"
+			s.Fielded = s.Fielded || r == "fielded"
+			s.Date = s.Date || r == "date"
+		}
+		if s.Facet || s.Fielded || s.Date {
+			out = append(out, s)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// pageFields reads a page's front matter (the JSON of pages.meta) as the values
+// of the fields the mapping names: the fields for the index, and the words of
+// the fields with the text role, for the page's description. The keys are
+// matched without regard to case.
+func (m *Mapping) pageFields(meta string) (fields map[string][]string, text []string) {
+	if meta == "" || meta == "{}" {
+		return nil, nil
+	}
+	var raw map[string]any
+	if json.Unmarshal([]byte(meta), &raw) != nil {
+		return nil, nil
+	}
+	lower := map[string]any{}
+	for k, v := range raw {
+		lower[strings.ToLower(k)] = v
+	}
+	fields = map[string][]string{}
+	for name, roles := range m.roles {
+		v, ok := lower[name]
+		if !ok {
+			continue
+		}
+		var vals []string
+		switch x := v.(type) {
+		case string:
+			if commaFields[name] {
+				for _, part := range strings.Split(x, ",") {
+					vals = append(vals, part)
+				}
+			} else {
+				vals = []string{x}
+			}
+		case []any:
+			for _, e := range x {
+				if s, ok := e.(string); ok {
+					vals = append(vals, s)
+				}
+			}
+		}
+		var kept []string
+		for _, v := range vals {
+			if v = strings.TrimSpace(v); v != "" {
+				kept = append(kept, v)
+			}
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		fields[name] = kept
+		for _, r := range roles {
+			if r == "text" {
+				text = append(text, kept...)
+			}
+		}
+	}
+	return fields, text
 }

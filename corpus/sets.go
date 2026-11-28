@@ -371,11 +371,15 @@ func (d *DB) setPages(ctx context.Context, site string, skip func(string) bool) 
 	return out, classify(rows.Err())
 }
 
+// buildRevision changes when what an index is built from the same pages changes
+// (2: filter files for the front matter fields), so every set is built again once.
+const buildRevision = 2
+
 // inputDigest is what a set's index is a function of: the analyzer, the field
 // mapping and the pages that go in.
 func inputDigest(fieldsVersion int, fields string, pages []setPage) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s\n%d\n%s\n", index.Analyzer, fieldsVersion, fields)
+	fmt.Fprintf(h, "%s\n%d\n%s\n%d\n", index.Analyzer, fieldsVersion, fields, buildRevision)
 	for _, p := range pages {
 		m := sha256.Sum256([]byte(p.meta))
 		fmt.Fprintf(h, "%s %s %x\n", p.address, p.hash, m[:6])
@@ -460,15 +464,24 @@ func (d *DB) buildSet(ctx context.Context, site string, chunk int, force bool) (
 	if !force && oerr == nil && digest == stored && int(old.Generation()) == gen {
 		return old, false, nil
 	}
+	mapping, err := d.FieldMapping(ctx, site)
+	if err != nil {
+		return nil, false, err
+	}
 	docs := make([]index.Doc, len(pages))
 	for i, p := range pages {
-		docs[i] = index.Doc{Address: p.address, Title: p.title, Description: p.description, Body: p.body}
+		fields, text := mapping.pageFields(p.meta)
+		desc := p.description
+		if len(text) > 0 { // the text role: the field's words are searched with the description
+			desc = strings.TrimSpace(desc + " " + strings.Join(text, " "))
+		}
+		docs[i] = index.Doc{Address: p.address, Title: p.title, Description: desc, Body: p.body, Fields: fields}
 	}
 	next := uint64(1)
 	if oerr == nil {
 		next = old.Generation() + 1
 	}
-	rep, err := index.BuildWithReport(dir, docs, index.BuildOptions{ChunkEntries: chunk, Generation: next})
+	rep, err := index.BuildWithReport(dir, docs, index.BuildOptions{ChunkEntries: chunk, Generation: next, Fields: mapping.specs()})
 	if err != nil {
 		if index.IsDataError(err) {
 			return nil, false, err

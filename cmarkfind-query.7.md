@@ -23,6 +23,17 @@ and body.
     compil*                  words that start with compil
     title:oberon             the word in the title only (also description:, body:)
     (oberon OR modula) -tide groups
+    author:doiel             pages whose author field has the word (see below)
+    keywords:"static sites"  all the words, in the field's values
+
+A field of a page's front matter can be searched when the page's set maps it as
+fielded (cmarkfind-set(7); keywords and author are by default). The clause finds
+the pages whose field has every word you wrote, in any of its values; a phrase
+asks for all of its words and a trailing * makes the last a prefix. A clause on a
+field no set maps is read as words: note:text is the words note and text. A clause
+on a field one searched set maps and another does not matches nothing in the
+other, and is not an error. A clause on a field selects pages and does not rank
+them; the words of the text do. Field names do not depend on case.
 
 Case does not matter, nor does the spelling of an accent or a letter form: an
 accent written as a combining mark, a ligature, a full-width letter and the

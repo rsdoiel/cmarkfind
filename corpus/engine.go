@@ -276,7 +276,36 @@ const rrfK = 60
 // snippet each. The pinned and tag sets filter before ranking. With aggregate,
 // a set whose analyzer this program does not read is left out with a warning.
 func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int) ([]Hit, error) {
-	node, err := index.ParseQuery(query, nil)
+	// open each set's index first: a query's field clauses are parsed for the
+	// union of the fields the sets offer, and a set that lacks one matches nothing for it
+	type opened struct {
+		site string
+		ix   *index.Index
+	}
+	var sets []opened
+	fieldSet := map[string]bool{}
+	var fields []string
+	for _, site := range sites {
+		ix, err := d.currentSet(ctx, site)
+		if aggregate && index.IsAnalyzerError(err) {
+			// never mixed: a set in another word rule is left out, and said so
+			d.mu.Lock()
+			d.warnings = append(d.warnings, fmt.Sprintf("set %v; left out of the search (search-set reads it only when this program knows its analyzer)", err))
+			d.mu.Unlock()
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		sets = append(sets, opened{site, ix})
+		for _, f := range ix.QueryFields() {
+			if !fieldSet[f] {
+				fieldSet[f] = true
+				fields = append(fields, f)
+			}
+		}
+	}
+	node, err := index.ParseQuery(query, fields)
 	if err != nil {
 		return nil, err
 	}
@@ -296,18 +325,8 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 	}
 	var all []*cand
 	meta := map[string]pageMeta{}
-	for _, site := range sites {
-		ix, err := d.currentSet(ctx, site)
-		if aggregate && index.IsAnalyzerError(err) {
-			// never mixed: a set in another word rule is left out, and said so
-			d.mu.Lock()
-			d.warnings = append(d.warnings, fmt.Sprintf("set %v; left out of the search (search-set reads it only when this program knows its analyzer)", err))
-			d.mu.Unlock()
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
+	for _, set := range sets {
+		ix := set.ix
 		found, err := ix.Search(node, 0)
 		if err != nil {
 			return nil, err

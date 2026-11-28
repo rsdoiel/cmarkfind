@@ -12,6 +12,7 @@ import "strings"
 type pageWords struct {
 	terms []string // the term of each word; "" for a word too long to be indexed
 	field []string // "title", "description" or "body" for each word
+	frag  *fragmentRec
 }
 
 var fieldOfWeight = map[int]string{weightTitle: "title", weightDescription: "description", weightBody: "body"}
@@ -23,7 +24,7 @@ func wordsOf(fr *fragmentRec) pageWords {
 	if fr.Text != "" {
 		surfaces = strings.Split(fr.Text, " ")
 	}
-	pw := pageWords{terms: make([]string, len(surfaces)), field: make([]string, len(surfaces))}
+	pw := pageWords{terms: make([]string, len(surfaces)), field: make([]string, len(surfaces)), frag: fr}
 	for i, s := range surfaces {
 		if t := term(s); len(t) <= MaxTermBytes {
 			pw.terms[i] = t
@@ -93,6 +94,9 @@ func (pw pageWords) match(n *Node, field string) bool {
 		return false
 	case KindNot:
 		return !pw.match(n.Kids[0], field)
+	}
+	if !isTextField(n.Field) {
+		return fieldMatches(pw.frag, n) // a front matter field: the values the fragment keeps
 	}
 	return len(pw.leafMatches(n, field)) > 0
 }

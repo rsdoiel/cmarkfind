@@ -204,6 +204,20 @@ sets them and <code>-reset</code> returns the set to the default. A
 change makes the next build replace the set’s index. A date field that
 holds something that is not a date is warned about, once for the page
 and field, and the page is left without it.</li>
+<li>Searching front matter: <code>author:doiel</code>,
+<code>keywords:"static sites"</code>,
+<code>author:(ann OR doiel)</code>, <code>-author:ann</code>. A field a
+set maps as <code>fielded</code> has a filter file in the set’s index
+(listed in the manifest’s <code>filters</code>, under <code>x/</code>);
+a clause finds the pages whose field has every word of it. A clause on a
+field no set maps is read as words; on a field one searched set maps and
+another does not, it matches nothing in the other. <code>keywords</code>
+and <code>tags</code> given as one comma string are several values. The
+<code>text</code> role adds a field’s words to the page’s description,
+so a plain search finds them. <code>set fields</code> builds the set’s
+index at once when it changes the mapping, as a fill does.</li>
+<li>Every set is built again once after this release’s first search or
+fill (the build carries a revision).</li>
 </ul>
 <h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>

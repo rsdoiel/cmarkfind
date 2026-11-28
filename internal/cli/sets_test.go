@@ -565,17 +565,28 @@ func TestABadAssignmentIsExit2AndAnUnknownSetIs66(t *testing.T) {
 	}
 }
 
-func TestAChangedMappingMakesTheNextBuildReplaceThatSetsIndex(t *testing.T) {
+// set fields builds the set it changed, as a fill does, so the next search
+// reads the new mapping; a build after it has nothing to do.
+func TestSetFieldsRebuildsThatSetAtOnceAndNoOther(t *testing.T) {
 	db, a, b := twoSets(t)
 	ma, mb := manifest(t, setIndexDir(t, db, a)), manifest(t, setIndexDir(t, db, b))
 	if r := do(t, "-db", db, "set", "fields", a, "tags=facet"); r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	if r := do(t, "-db", db, "indexer", "build"); !strings.Contains(r.out, "built 1, unchanged 1") {
+	if manifest(t, setIndexDir(t, db, a)) == ma {
+		t.Error("the changed set's index was not replaced by set fields")
+	}
+	if manifest(t, setIndexDir(t, db, b)) != mb {
+		t.Error("another set's index was replaced")
+	}
+	if r := do(t, "-db", db, "indexer", "build"); !strings.Contains(r.out, "built 0, unchanged 2") {
 		t.Errorf("%+v", r)
 	}
-	if manifest(t, setIndexDir(t, db, a)) == ma || manifest(t, setIndexDir(t, db, b)) != mb {
-		t.Error("only the changed set's index is replaced")
+	// the same assignment again, and -reset to what it already is, change nothing
+	ma = manifest(t, setIndexDir(t, db, a))
+	do(t, "-db", db, "set", "fields", a, "tags=facet")
+	if manifest(t, setIndexDir(t, db, a)) != ma {
+		t.Error("an assignment that changed nothing rebuilt")
 	}
 }
 

@@ -187,6 +187,13 @@ func (o *out) setFields(ctx context.Context, dbFile string, args []string) error
 	if err != nil {
 		return err
 	}
+	if *reset || fset.NArg() > 1 { // a set builds its index when its mapping changes, as a fill does
+		_, err := db.BuildSets(ctx, site, 0)
+		o.indexWarnings(db)
+		if err != nil {
+			return err
+		}
+	}
 	m, err := db.FieldMapping(ctx, site)
 	if err != nil {
 		return err

@@ -41,6 +41,10 @@
 max-file-size = 8388608      ; 8 MiB decompressed
 max-files = 1000000
 
+; A front matter field's name: lower case letters, digits, - and _, at most 64
+; characters; never title, description or body.
+field-name = tstr .regexp "[a-z0-9][a-z0-9_-]{0,63}"
+
 ; Named key types: a map may hold any further text (or unsigned) keys.
 text-key = tstr
 uint-key = uint
@@ -57,7 +61,7 @@ manifest = {
   compression: compression,        ; applies to every file unless a file says otherwise
   documents: documents,
   chunks: [+ chunk],               ; sorted, covering every word, no overlap
-  ? filters: {* text-key => file},     ; reserved for facets
+  ? filters: {* text-key => filter-entry},   ; by field name (see field-name): one filter file for each mapped front matter field
   ? extensions: {* text-key => any},   ; reverse-domain names; ignored when unknown
   * text-key => any                ; unknown keys are ignored
 }
@@ -159,5 +163,26 @@ segment = [weight: uint, words: uint]
 
 ; ------------------------------------------------------------ filter files
 
-; Reserved. Version 1 writers emit none and readers ignore "filters".
-filter-file = [1, "unicode-word-v3", generation: uint, name: tstr, values: {* text-key => [* uint]}]
+; A front matter field with a facet, fielded or date role has one filter file,
+; named in the manifest's "filters" with the roles it was built for; a field no
+; page has a value for has none. A reader that does not know filters ignores
+; them, and reads a clause on such a field as text. A reader that does know them
+; answers `field:word` from "terms" and treats a field the index has no terms for
+; as matching nothing. Document numbers in a list are strictly increasing and
+; below the document count. Files are kept under x/.
+filter-entry = {
+  file: file,
+  roles: [+ "facet" / "fielded" / "date"]
+}
+
+; values: the whole values of the field, folded (NFKC, case folded, trimmed), to
+;   the documents that have one (the facet role; empty otherwise).
+; terms: the words of the values, as the analyzer makes them, to the documents
+;   whose field has the word (the fielded role; empty otherwise). A clause
+;   author:"r s doiel" asks for every word of its phrase, in any order and in any
+;   of the field's values; a trailing * makes the last word a prefix.
+; days: for each document, the day number (days since 1970-01-01) of the first
+;   value of the field that is a date, or null for a document with none (the date
+;   role); an empty list for a field without the date role.
+filter-file = [1, "unicode-word-v3", generation: uint, name: field-name,
+               values: {* text-key => [* uint]}, terms: {* text-key => [* uint]}, days: [* int / null]]

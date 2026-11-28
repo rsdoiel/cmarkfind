@@ -83,6 +83,7 @@ type Index struct {
 	chunks map[int][]entry
 	rows   []documentRow // all document rows, loaded on first use
 	frags  map[int]*fragmentRec
+	flt    filters // filter files, loaded on first use
 }
 
 /** Open reads and checks the manifest in dir. It refuses an unknown format,
@@ -205,6 +206,22 @@ func openSource(src Source, where string) (*Index, error) {
 	}
 	if next != m.Documents.Count {
 		return nil, dataf("document ranges cover %d documents, the manifest says %d", next, m.Documents.Count)
+	}
+	if len(m.Filters) > maxFilters {
+		return nil, dataf("manifest names too many filter files")
+	}
+	for name, r := range m.Filters {
+		if !filterNameRE.MatchString(name) || fieldWeight[name] != 0 {
+			return nil, dataf("%q is not a filter name", name)
+		}
+		for _, role := range r.Roles {
+			if role != roleFacet && role != roleFielded && role != roleDate {
+				return nil, dataf("filter %s has the unknown role %q", name, role)
+			}
+		}
+		if len(r.Roles) == 0 {
+			return nil, dataf("filter %s has no role", name)
+		}
 	}
 	return &Index{src: src, m: m, docOnly: docOnly, chunks: map[int][]entry{}, frags: map[int]*fragmentRec{}}, nil
 }
@@ -570,6 +587,10 @@ type evaluator struct {
 func (ev *evaluator) eval(n *Node) (map[int]float64, bool, error) {
 	switch n.Kind {
 	case KindTerm, KindPhrase:
+		if !isTextField(n.Field) {
+			out, err := ev.fieldLeaf(n)
+			return out, false, err
+		}
 		out, err := ev.leaf(n)
 		return out, ev.ix.uncertain(n), err
 	case KindOr:
@@ -644,7 +665,7 @@ func (ev *evaluator) eval(n *Node) (map[int]float64, bool, error) {
 // uncertain reports whether the index's answer for a leaf is only a superset:
 // a phrase with a document-only word, whose place in the page it does not know.
 func (ix *Index) uncertain(n *Node) bool {
-	return n.Kind == KindPhrase && ix.hasDocumentOnly(n)
+	return isTextField(n.Field) && n.Kind == KindPhrase && ix.hasDocumentOnly(n)
 }
 
 // hasDocumentOnly reports whether any word of a term or phrase is stored
@@ -875,6 +896,11 @@ func VerifySource(src Source) error {
 }
 
 func verifyIndex(ix *Index) error {
+	for name := range ix.m.Filters {
+		if _, err := ix.filter(name); err != nil {
+			return err
+		}
+	}
 	for i := range ix.m.Chunks {
 		if _, err := ix.chunk(i); err != nil {
 			return err

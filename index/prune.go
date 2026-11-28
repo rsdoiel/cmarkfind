@@ -79,11 +79,14 @@ func PruneOlderThan(dir string, grace time.Duration) (int, error) {
 	for _, r := range ix.m.Documents.Ranges {
 		live[compressedName("d", r.File.Digest, ix.m.Compression)] = true
 	}
+	for _, r := range ix.m.Filters {
+		live[compressedName("x", r.File.Digest, ix.m.Compression)] = true
+	}
 	for _, r := range rows {
 		live[compressedName("f", hex.EncodeToString(r.Fragment), ix.m.Compression)] = true
 	}
 	removed := 0
-	for _, kind := range []string{".", "w", "d", "f"} {
+	for _, kind := range []string{".", "w", "d", "f", "x"} {
 		ents, err := os.ReadDir(filepath.Join(dir, kind))
 		if err != nil {
 			continue

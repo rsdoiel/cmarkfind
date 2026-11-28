@@ -149,6 +149,9 @@ func (ix *Index) Marks(n *Node, doc int) ([]Mark, error) {
 		case KindNot:
 			return nil
 		case KindTerm, KindPhrase:
+			if !isTextField(n.Field) {
+				return nil // a front matter clause selects pages; there is no word of the text to mark
+			}
 			if ix.hasDocumentOnly(n) {
 				// where the index has no positions the page's own words say
 				fr, err := ix.fragment(doc)

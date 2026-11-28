@@ -33,6 +33,7 @@ const docsPerTable = 5000
  */
 type Doc struct {
 	Address, Title, Description, Body string
+	Fields                            map[string][]string // front matter values by lower case field name
 }
 
 /** BuildOptions are the build settings; none is part of the format.
@@ -58,7 +59,8 @@ type BuildOptions struct {
 	Built        time.Time
 	EntryBytes   int
 	FileLimit    int
-	postingCap   int // pages one word may be on; 0 means defaultPostingCap (tests lower it)
+	Fields       []FieldSpec // the fields to write filter files for
+	postingCap   int         // pages one word may be on; 0 means defaultPostingCap (tests lower it)
 }
 
 // defaultPostingCap is the most pages one word may be on: a word's posting list
@@ -219,6 +221,10 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 		return err
 	}
 
+	fvs, err := fieldValuesFor(opt.Fields)
+	if err != nil {
+		return err
+	}
 	postings := map[string][]rawPosting{}
 	var rows []documentRow
 	var totalWords uint64
@@ -269,6 +275,11 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 		if d.Description != "" {
 			fields["description"] = d.Description
 		}
+		for _, fv := range fvs { // the front matter the page keeps, for settling a clause on the page itself
+			if vals := nonEmpty(d.Fields[fv.spec.Name]); len(vals) > 0 {
+				fields[fv.spec.Name] = vals
+			}
+		}
 		frag := fragmentRec{Address: d.Address, Text: strings.Join(surfaces, " "), WordCount: uint64(len(surfaces)), Segments: segments}
 		if len(fields) > 0 {
 			frag.Fields = fields
@@ -288,6 +299,9 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 			return fmt.Errorf("the page %s: %w", d.Address, err)
 		}
 		doc := len(rows) // pages left out do not take a number
+		for _, fv := range fvs {
+			fv.add(doc, d.Fields[fv.spec.Name])
+		}
 		for term, os := range occ {
 			postings[term] = append(postings[term], rawPosting{doc: doc, locs: encodeLocations(os)})
 		}
@@ -407,6 +421,23 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 	}
 	if len(m.DocumentOnly) > 0 {
 		m.Required = append(m.Required, FeatureDocumentOnly)
+	}
+	for _, fv := range fvs {
+		if fv.empty() {
+			continue // no page has a value: nothing to write
+		}
+		if len(fv.values) > maxFilterPairs || len(fv.terms) > maxFilterPairs {
+			return fmt.Errorf("the field %q has more than %d different values or words: %w", fv.spec.Name, maxFilterPairs, ErrTooLarge)
+		}
+		ref, err := encodeFileLimit(dir, "x", compression, fv.file(opt.Generation, len(rows)), opt.FileLimit)
+		if err != nil {
+			return fmt.Errorf("the filter for %q: %w", fv.spec.Name, err)
+		}
+		note("filter", ref.Size, "the field "+fv.spec.Name)
+		if m.Filters == nil {
+			m.Filters = map[string]filterRef{}
+		}
+		m.Filters[fv.spec.Name] = filterRef{File: ref, Roles: fv.roles()}
 	}
 	for kind, b := range biggest {
 		if b.size > int64(opt.FileLimit)/2 {

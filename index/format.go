@@ -185,15 +185,16 @@ type documentsRec struct {
 }
 
 type manifest struct {
-	Format       string       `json:"format"`
-	Analyzer     string       `json:"analyzer"`
-	Generation   uint64       `json:"generation"`
-	Built        string       `json:"built"`
-	Required     []string     `json:"required,omitempty"`
-	DocumentOnly []string     `json:"documentOnly,omitempty"`
-	Compression  string       `json:"compression"`
-	Documents    documentsRec `json:"documents"`
-	Chunks       []chunkRef   `json:"chunks"`
+	Format       string               `json:"format"`
+	Analyzer     string               `json:"analyzer"`
+	Generation   uint64               `json:"generation"`
+	Built        string               `json:"built"`
+	Required     []string             `json:"required,omitempty"`
+	DocumentOnly []string             `json:"documentOnly,omitempty"`
+	Compression  string               `json:"compression"`
+	Documents    documentsRec         `json:"documents"`
+	Chunks       []chunkRef           `json:"chunks"`
+	Filters      map[string]filterRef `json:"filters,omitempty"`
 }
 
 // posting is [delta, locations]; a reader ignores trailing elements (the
