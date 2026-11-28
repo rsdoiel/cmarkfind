@@ -40,6 +40,8 @@ func DefaultDB() string { return corpus.DefaultPath() }
 type out struct {
 	stdout, stderr io.Writer
 	json           bool
+	probing        bool          // verbFlags: stop at parse and keep the FlagSet
+	probed         *flag.FlagSet // the FlagSet parse was asked to read
 }
 
 /** Run runs the command line and returns the exit code (cmarkfind DR-0002).
@@ -108,7 +110,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		return o.fail(fmt.Errorf("%w: unknown option %s", ErrUsage, args[0]))
 	}
 	if len(args) == 0 {
-		return o.fail(fmt.Errorf("%w: no verb (fill, search, indexer, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage))
+		return o.fail(fmt.Errorf("%w: no verb (%s)", ErrUsage, verbList()))
 	}
 	if dbFile == "" {
 		dbFile = DefaultDB()
@@ -137,32 +139,13 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 			return ExitOK
 		}
 		return o.fail(helpTopic(stdout, topic, asJSON))
-	case "fill":
-		return o.fail(o.fill(ctx, dbFile, rest))
-	case "search":
-		return o.fail(o.search(ctx, dbFile, rest))
-	case "indexer":
-		return o.fail(o.indexer(ctx, dbFile, rest))
 	case "index":
 		return o.fail(fmt.Errorf("%w: there is no index verb; did you mean indexer (build, validate, list)? search takes -index DIR", ErrUsage))
-	case "stats":
-		return o.fail(o.stats(ctx, dbFile, rest))
-	case "forget":
-		return o.fail(o.forget(ctx, dbFile, rest))
-	case "exclude":
-		return o.fail(o.exclude(ctx, dbFile, rest))
-	case "unexclude":
-		return o.fail(o.unexclude(ctx, dbFile, rest))
-	case "pin":
-		return o.fail(o.pin(ctx, dbFile, rest))
-	case "unpin":
-		return o.fail(o.unpin(ctx, dbFile, rest))
-	case "tag":
-		return o.fail(o.tag(ctx, dbFile, rest))
-	case "untag":
-		return o.fail(o.untag(ctx, dbFile, rest))
 	}
-	return o.fail(fmt.Errorf("%w: unknown verb %q (fill, search, indexer, stats, forget, exclude, unexclude, pin, unpin, tag, untag, help)", ErrUsage, verb))
+	if v, ok := findVerb(verb); ok && v.run != nil {
+		return o.fail(v.run(o, ctx, dbFile, rest))
+	}
+	return o.fail(fmt.Errorf("%w: unknown verb %q (%s)", ErrUsage, verb, verbList()))
 }
 
 // fail reports err (one line on standard error, and in JSON mode an object on
@@ -189,6 +172,10 @@ func flags(name string, o *out) (*flag.FlagSet, *bool) {
 }
 
 func parse(fs *flag.FlagSet, args []string, o *out, j *bool) error {
+	if o.probing {
+		o.probed = fs
+		return errProbed
+	}
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("%w: %s %v", ErrUsage, fs.Name(), err)
 	}

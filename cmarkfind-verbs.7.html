@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-verbs.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-verbs — list the verbs and their options</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind verbs [-json]</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>List every verb with a one-line summary. With -json the output is
+{“verbs”: [{“name”, “summary”, “subverbs”, “flags”}]}: the flags of each
+verb, each with its name and whether it is a switch (“bool”: true) or
+takes a value. A verb with subverbs (indexer) lists the flags of each
+under “sub”. The lists are read from the verbs themselves, the ones
+shell completion uses. It opens no corpus.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-json</dt>
+<dd>
+Write the list as JSON.
+</dd>
+</dl>
+<h1 id="exit-status">EXIT STATUS</h1>
+<dl>
+<dt>0</dt>
+<dd>
+Success.
+</dd>
+<dt>2</dt>
+<dd>
+An argument or an unknown option.
+</dd>
+</dl>
+<p>See cmarkfind-exit-status(7).</p>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-completion(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-verbs.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

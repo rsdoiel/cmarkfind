@@ -454,6 +454,117 @@ Take tags off a page.
 
 cmarkfind(1), cmarkfind-tag(7)
 `},
+	{"verbs", "list the verbs and their options", `# SYNOPSIS
+
+cmarkfind verbs [-json]
+
+# DESCRIPTION
+
+List every verb with a one-line summary. With -json the output is
+{"verbs": [{"name", "summary", "subverbs", "flags"}]}: the flags of each verb,
+each with its name and whether it is a switch ("bool": true) or takes a value.
+A verb with subverbs (indexer) lists the flags of each under "sub". The lists
+are read from the verbs themselves, the ones shell completion uses. It opens no
+corpus.
+
+# OPTIONS
+
+-json
+: Write the list as JSON.
+
+# EXIT STATUS
+
+0
+: Success.
+
+2
+: An argument or an unknown option.
+
+See cmarkfind-exit-status(7).
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-completion(7)
+`},
+	{"completion", "set up tab completion in bash or PowerShell", `# SYNOPSIS
+
+cmarkfind completion bash|powershell
+
+cmarkfind completion bash|powershell -install | -uninstall | -check
+
+# DESCRIPTION
+
+Write a completion script for a shell. It completes the verbs, indexer's
+subverbs, each verb's options, the help topics, and file names where a file is
+wanted (-db, -index and the arguments of fill and indexer). The lists come from
+the verbs themselves (see cmarkfind-verbs(7)), so a new verb or option is
+completed with no change to the script generator.
+
+With no option the script goes to standard output. Load it for one session:
+
+    eval "$(cmarkfind completion bash)"
+    cmarkfind completion powershell | Out-String | Invoke-Expression
+
+-install does that for every new session. For bash it writes
+$XDG_DATA_HOME/bash-completion/completions/cmarkfind (under ~/.local/share when
+XDG_DATA_HOME is not set) and adds one line to the file a new shell reads,
+~/.bashrc, or on macOS the first of ~/.bash_profile, ~/.bash_login and
+~/.profile that exists; the line is what makes it work where no loader reads the
+completions directory, as in macOS's bash 3.2. For PowerShell it writes
+cmarkfind-completion.ps1 beside the profile (~/.config/powershell, or
+Documents\PowerShell on Windows) and adds one line to Microsoft.PowerShell_profile.ps1.
+The line is added once. An existing file that cmarkfind did not write is never
+overwritten.
+
+# OPTIONS
+
+-install
+: Write the script and have the shell load it.
+
+-uninstall
+: Remove the script if cmarkfind wrote it, and the line it added. Files
+  cmarkfind did not write are left alone.
+
+-check
+: Say, one line each, whether the script is installed, current, and sourced by
+  the startup file. It reads files only; for bash it ends with the command that
+  asks the running shell.
+
+-json
+: Write the result as JSON: {"shell", "path"} for -install, {"shell", "removed"}
+  for -uninstall and {"shell", "ok"} for -check.
+
+# EXIT STATUS
+
+0
+: Done, or -check found everything in order.
+
+1
+: -uninstall found nothing of cmarkfind's to remove; -check found a problem.
+
+2
+: No shell, a shell other than bash or powershell (pwsh is accepted), or more
+  than one of -install, -uninstall and -check.
+
+66
+: No home directory could be found.
+
+73
+: A file that cmarkfind did not write is in the way, or the script's directory
+  cannot be made.
+
+74
+: The startup file could not be read or written.
+
+77
+: The system refused access.
+
+See cmarkfind-exit-status(7).
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-verbs(7)
+`},
 	{"query", "the search syntax", `# DESCRIPTION
 
 A query is a Lucene-style string, searched over each page's title, description
@@ -544,7 +655,8 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 
 1
 : The answer is no: search found nothing (also over an index); forget's SITE or unexclude's PREFIX
-  had nothing to act on; robots.txt forbids the table of contents.
+  had nothing to act on; robots.txt forbids the table of contents; completion
+  -uninstall found nothing, or -check found a problem.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
@@ -565,7 +677,12 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : A bug.
 
 73
-: The corpus file or its directory, or an index's directory, cannot be created.
+: The corpus file or its directory, or an index's directory, cannot be created;
+  completion's script or its directory cannot be created, or a file cmarkfind did
+  not write is in the way.
+
+74
+: A read or write failed part way: completion's startup file.
 
 75
 : The corpus is locked by another program; try again.

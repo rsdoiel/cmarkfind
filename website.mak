@@ -23,7 +23,7 @@ PROGRAMS = cmarkfind
 
 # Every published page, in the order of the table of contents, README.md first:
 # it is the home page. The files in NO_PUBLISH are not pages.
-PAGE_ORDER = README.md cmarkfind.1.md cmarkfind-fill.7.md cmarkfind-search.7.md cmarkfind-indexer.7.md cmarkfind-stats.7.md cmarkfind-forget.7.md cmarkfind-exclude.7.md cmarkfind-unexclude.7.md cmarkfind-pin.7.md cmarkfind-unpin.7.md cmarkfind-tag.7.md cmarkfind-untag.7.md cmarkfind-query.7.md cmarkfind-corpus.7.md cmarkfind-exit-status.7.md CHANGES.md INSTALL.md INSTALL_NOTES_macOS.md INSTALL_NOTES_Windows.md about.md
+PAGE_ORDER = README.md cmarkfind.1.md cmarkfind-fill.7.md cmarkfind-search.7.md cmarkfind-indexer.7.md cmarkfind-stats.7.md cmarkfind-forget.7.md cmarkfind-exclude.7.md cmarkfind-unexclude.7.md cmarkfind-pin.7.md cmarkfind-unpin.7.md cmarkfind-tag.7.md cmarkfind-untag.7.md cmarkfind-verbs.7.md cmarkfind-completion.7.md cmarkfind-query.7.md cmarkfind-corpus.7.md cmarkfind-exit-status.7.md CHANGES.md INSTALL.md INSTALL_NOTES_macOS.md INSTALL_NOTES_Windows.md about.md
 
 # Internal notes stay unpublished. index.md is a copy of README.md.
 NO_PUBLISH = TODO.md index.md

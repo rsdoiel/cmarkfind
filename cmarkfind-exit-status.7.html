@@ -33,7 +33,8 @@ Success.
 <dd>
 The answer is no: search found nothing (also over an index); forget’s
 SITE or unexclude’s PREFIX had nothing to act on; robots.txt forbids the
-table of contents.
+table of contents; completion -uninstall found nothing, or -check found
+a problem.
 </dd>
 <dt>2</dt>
 <dd>
@@ -63,7 +64,12 @@ A bug.
 <dt>73</dt>
 <dd>
 The corpus file or its directory, or an index’s directory, cannot be
-created.
+created; completion’s script or its directory cannot be created, or a
+file cmarkfind did not write is in the way.
+</dd>
+<dt>74</dt>
+<dd>
+A read or write failed part way: completion’s startup file.
 </dd>
 <dt>75</dt>
 <dd>

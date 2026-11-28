@@ -88,6 +88,14 @@ unexclude PREFIX
 : Remove an exclusion. Pages come back with the next fill. Exit 1 if there was
   no such rule.
 
+verbs [-json]
+: List the verbs with a line each; with -json also their options. See
+  cmarkfind-verbs(7).
+
+completion bash|powershell [-install | -uninstall | -check]
+: Write a tab-completion script for bash or PowerShell, or install it, remove it
+  or check it. See cmarkfind-completion(7).
+
 help [TOPIC]
 : Show this page, or one topic's page. help index lists the topics: one for
   each verb, and query, corpus and exit-status. Each is also a manual page of
@@ -113,7 +121,8 @@ help [TOPIC]
 
 1
 : search found nothing; forget's SITE or unexclude's PREFIX had nothing to
-  act on; robots.txt forbids the table of contents.
+  act on; robots.txt forbids the table of contents; completion -uninstall found
+  nothing, or -check found a problem.
 
 2
 : Bad command line: unknown verb or option, missing argument, bad value; a
@@ -132,7 +141,11 @@ help [TOPIC]
   its counts and exits with the class of the first failure.
 
 73
-: The corpus file or its directory cannot be created.
+: The corpus file or its directory cannot be created; completion cannot write its
+  script.
+
+74
+: A read or write failed part way (completion's startup file).
 
 75
 : The corpus is locked by another program; try again.
@@ -161,7 +174,8 @@ help [TOPIC]
 
 cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-indexer(7), cmarkfind-stats(7), cmarkfind-forget(7),
 cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-pin(7),
-cmarkfind-unpin(7), cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-query(7),
+cmarkfind-unpin(7), cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-verbs(7),
+cmarkfind-completion(7), cmarkfind-query(7),
 cmarkfind-corpus(7), cmarkfind-exit-status(7)
 
 markdownweb, cmarkbrowser, BonBon (Dave Winer)

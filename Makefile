@@ -21,7 +21,7 @@ MAN_PAGES_3 = $(patsubst %.3.md,%.3,$(wildcard *.3.md))
 
 # TOPICS names the help topics, as `cmarkfind help index` lists them (a test checks
 # this). Each is written to cmarkfind-TOPIC.7.md by `make build`.
-TOPICS = fill search indexer stats forget exclude unexclude pin unpin tag untag query corpus exit-status
+TOPICS = fill search indexer stats forget exclude unexclude pin unpin tag untag verbs completion query corpus exit-status
 
 MAN_PAGES_7 = $(foreach p,$(PROGRAMS),$(addprefix $(p)-,$(addsuffix .7,$(TOPICS))))
 

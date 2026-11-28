@@ -23,7 +23,7 @@ To match the workspace standard (knowledge and opml are the models; Go 1.27.3 ac
 - [x] website.mak, page.tmpl, add-col-scope.lua, website.ps1: take knowledge's. Done 2026-11-26, from knowledge: PAGE_ORDER lists README, INSTALL, the two INSTALL_NOTES and about; toc.bash and css/site.css added; the dead User Manual nav link dropped (there is no user manual yet).
 
 - [x] PROGRAMS = cmarkfind (2026-11-26, cmarkfind DR-0002 built). makefile_test.go and site_test.go added 2026-11-26 (from opml's; the website is built, with cmarkfind.1.md published from `make build`'s help output).
-- [ ] CLI follow-ups (DR-0002 Open): `-site-url` for a local fill whose outline addresses are not the site's; `verbs` listing and shell completion. (Pin and tags are built.)
+- [ ] CLI follow-ups (DR-0002 Open): all built 2026-11-27 (`fill -site-url`, `verbs`, `completion`). Completion of corpus values (pinned addresses, tags, sites) is not done.
 - [x] Trickle: fill -batch/-every/-until-done built 2026-11-26 (cmarkfind DR-0004, proposed); schema version 3.
 - [x] Curation: forget, exclude, unexclude built 2026-11-26 (cmarkfind DR-0003, proposed).
 - [x] v0.0.1 release review 2026-11-26: go.mod on markdownweb v0.0.5, README/INSTALL/CHANGES.md brought current, codemeta.json 0.0.1. `help index` and nine per-topic section 7 pages added.

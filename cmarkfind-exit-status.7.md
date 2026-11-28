@@ -23,7 +23,8 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 
 1
 : The answer is no: search found nothing (also over an index); forget's SITE or unexclude's PREFIX
-  had nothing to act on; robots.txt forbids the table of contents.
+  had nothing to act on; robots.txt forbids the table of contents; completion
+  -uninstall found nothing, or -check found a problem.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
@@ -44,7 +45,12 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : A bug.
 
 73
-: The corpus file or its directory, or an index's directory, cannot be created.
+: The corpus file or its directory, or an index's directory, cannot be created;
+  completion's script or its directory cannot be created, or a file cmarkfind did
+  not write is in the way.
+
+74
+: A read or write failed part way: completion's startup file.
 
 75
 : The corpus is locked by another program; try again.

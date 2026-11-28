@@ -99,6 +99,16 @@ end a folder with a slash. -list shows the rules.</p>
 Remove an exclusion. Pages come back with the next fill. Exit 1 if there
 was no such rule.
 </dd>
+<dt>verbs [-json]</dt>
+<dd>
+List the verbs with a line each; with -json also their options. See
+cmarkfind-verbs(7).
+</dd>
+<dt>completion bash|powershell [-install | -uninstall | -check]</dt>
+<dd>
+Write a tab-completion script for bash or PowerShell, or install it,
+remove it or check it. See cmarkfind-completion(7).
+</dd>
 <dt>help [TOPIC]</dt>
 <dd>
 Show this page, or one topic’s page. help index lists the topics: one
@@ -133,7 +143,8 @@ Success.
 <dt>1</dt>
 <dd>
 search found nothing; forget’s SITE or unexclude’s PREFIX had nothing to
-act on; robots.txt forbids the table of contents.
+act on; robots.txt forbids the table of contents; completion -uninstall
+found nothing, or -check found a problem.
 </dd>
 <dt>2</dt>
 <dd>
@@ -157,7 +168,12 @@ prints its counts and exits with the class of the first failure.
 </dd>
 <dt>73</dt>
 <dd>
-The corpus file or its directory cannot be created.
+The corpus file or its directory cannot be created; completion cannot
+write its script.
+</dd>
+<dt>74</dt>
+<dd>
+A read or write failed part way (completion’s startup file).
 </dd>
 <dt>75</dt>
 <dd>
@@ -189,8 +205,9 @@ cmarkfind forget ~/Sites/example.org</code></pre>
 <p>cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-indexer(7),
 cmarkfind-stats(7), cmarkfind-forget(7), cmarkfind-exclude(7),
 cmarkfind-unexclude(7), cmarkfind-pin(7), cmarkfind-unpin(7),
-cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-query(7),
-cmarkfind-corpus(7), cmarkfind-exit-status(7)</p>
+cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-verbs(7),
+cmarkfind-completion(7), cmarkfind-query(7), cmarkfind-corpus(7),
+cmarkfind-exit-status(7)</p>
 <p>markdownweb, cmarkbrowser, BonBon (Dave Winer)</p>
 </section>
 <footer>

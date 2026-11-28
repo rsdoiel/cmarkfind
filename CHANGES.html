@@ -26,6 +26,24 @@ prefix), whatever its outline lists. Without it, pages a relative
 outline link resolves to are stored under
 <code>http://site.local/</code> and <code>fill</code> warns on standard
 error.</li>
+<li><code>verbs [-json]</code> lists the verbs with a line each;
+<code>-json</code> adds each verb’s options (and <code>indexer</code>’s
+subverbs), read from the verbs themselves. New help topics
+<code>verbs</code> and <code>completion</code>.</li>
+<li><code>completion bash|powershell</code> writes a tab-completion
+script for the verbs, <code>indexer</code>’s subverbs, each verb’s
+options, the help topics and file names. <code>-install</code> writes it
+where the shell loads it
+(<code>$XDG_DATA_HOME/bash-completion/completions/cmarkfind</code> and a
+line in <code>~/.bashrc</code>, or beside the PowerShell profile) and
+never overwrites a file it did not write; <code>-uninstall</code>
+removes only what it wrote; <code>-check</code> says whether it is set
+up. The verb list is one table that dispatch, <code>verbs</code> and
+completion share.</li>
+<li>New exit status 74 (a read or write failed part way), used by
+<code>completion -install</code>; <code>completion -uninstall</code> and
+<code>-check</code> exit 1 when there is nothing to remove or a
+problem.</li>
 <li>Pin and tag: <code>pin</code> and <code>unpin</code> mark a page by
 its address so a pinned match is listed first; <code>tag</code> and
 <code>untag</code> give a page your own tags (letters, digits,
