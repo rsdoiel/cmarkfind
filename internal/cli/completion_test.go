@@ -151,7 +151,7 @@ var completionCases = []struct{ typed, want string }{
 	{"search-set -", "-json -limit -pinned -tag"},
 	{"set ", "fields ignore list show unignore"},
 	{"set fields -", "-json -reset"},
-	{"indexer ", "build list validate"},
+	{"indexer ", "build discover list validate"},
 	{"indexer b", "build"},
 	{"indexer build -", "-chunk -json"},
 	{"indexer list -", "-json"},

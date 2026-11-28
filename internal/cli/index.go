@@ -37,8 +37,10 @@ func (o *out) indexer(ctx context.Context, dbFile string, args []string) error {
 		return o.indexValidate(ctx, dbFile, args)
 	case "list":
 		return o.indexList(ctx, dbFile, args)
+	case "discover":
+		return o.indexDiscover(ctx, dbFile, args)
 	}
-	return fmt.Errorf("%w: unknown indexer verb %q (build, validate, list)", ErrUsage, verb)
+	return fmt.Errorf("%w: unknown indexer verb %q (build, validate, list, discover)", ErrUsage, verb)
 }
 
 // indexSets resolves the optional SET argument of an indexer verb: the one set,

@@ -68,7 +68,7 @@ func TestVerbsJSONHasSubverbsAndFlags(t *testing.T) {
 		t.Errorf("fill flags %+v lack -site-url", fill.Flags)
 	}
 	idx := v.Verbs[by["indexer"]]
-	if strings.Join(idx.Subverbs, " ") != "build validate list" {
+	if strings.Join(idx.Subverbs, " ") != "build validate list discover" {
 		t.Errorf("indexer subverbs %v", idx.Subverbs)
 	}
 	var chunk bool

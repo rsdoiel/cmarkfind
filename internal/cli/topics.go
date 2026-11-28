@@ -180,13 +180,15 @@ See cmarkfind-exit-status(7).
 
 cmarkfind(1), cmarkfind-query(7), cmarkfind-corpus(7)
 `},
-	{"indexer", "build, check and list a search index", `# SYNOPSIS
+	{"indexer", "build, check and list a search index, and find a site's published one", `# SYNOPSIS
 
 cmarkfind indexer build [-chunk N] [SET]
 
 cmarkfind indexer validate [SET]
 
 cmarkfind indexer [list] [SET]
+
+cmarkfind indexer discover SITE
 
 # DESCRIPTION
 
@@ -206,6 +208,18 @@ folder is a complete index that can be published as it is.
 validate reads every file of an index and checks it against the digest in
 manifest.json. list says what an index holds: pages, chunks, generation and
 when it was built, and the words it holds without positions.
+
+discover asks where a site publishes its index and says what it found, and
+changes nothing: no corpus is opened or made and no index file is fetched, only
+the manifest. SITE is a site address (https://example.org/) or the address of a
+manifest.json. For a site, discover reads /.well-known/cmarkfind.json at the
+site's root, a small JSON object such as {"index": "/cmarkfind/manifest.json"}
+whose "index" is a path or address on the same site, ending in manifest.json
+(at most 64 KiB; a key may not repeat; other keys are ignored). When that file
+is not there, discover tries /cmarkfind/manifest.json. A site that names a
+manifest that is missing is not searched at the default path instead. It
+prints the manifest's address, how it was found, and the generation, page
+count and build time the manifest declares.
 
 A word on a great many pages (a very common word such as "the", in any
 language) can make its entry too big for one index file. Over about 2 MiB an
@@ -259,13 +273,18 @@ search. A folder with no owner file goes to the first corpus that builds in it.
 66 when SET is not a set or has no index (or there is no corpus), 2 when SET
 fits more than one set, 65 when an index is damaged, 73 when an index cannot be
 written. validate checks every set and exits with the first failure's class.
-See cmarkfind-exit-status(7).
+discover exits 1 when the site publishes no index (or its cmarkfind.json names
+a manifest that is missing), 2 for a missing or bad address, 65 when its
+cmarkfind.json or manifest is wrong (another origin, not a manifest.json, a
+repeated key, over 64 KiB, a format or analyzer this program does not know),
+and 69 when the site cannot be reached. See cmarkfind-exit-status(7).
 
 # EXAMPLES
 
     cmarkfind indexer build
     cmarkfind indexer build rsdoiel.github.io
     cmarkfind indexer validate
+    cmarkfind indexer discover https://example.org/
 
 # SEE ALSO
 
@@ -864,7 +883,8 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 1
 : The answer is no: search or search-set found nothing, or every set is ignored; forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents; completion
-  -uninstall found nothing, or -check found a problem.
+  -uninstall found nothing, or -check found a problem; indexer discover found
+  no published index.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
@@ -873,7 +893,8 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 
 65
 : The file is not a corpus or has a newer schema; a source is malformed; an
-  index is damaged (a file does not match its digest, or the manifest is wrong).
+  index is damaged (a file does not match its digest, or the manifest is wrong);
+  a site's cmarkfind.json is wrong.
 
 66
 : A folder, the corpus (for search and stats) or a table of contents is missing;

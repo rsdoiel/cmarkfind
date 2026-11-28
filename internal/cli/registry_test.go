@@ -153,7 +153,7 @@ func TestAFlagHasTheSameKindInEveryVerb(t *testing.T) {
 func TestIndexerHasItsSubverbs(t *testing.T) {
 	for _, v := range verbSpecs() {
 		if v.Name == "indexer" {
-			if strings.Join(v.Subverbs, " ") != "build validate list" {
+			if strings.Join(v.Subverbs, " ") != "build validate list discover" {
 				t.Errorf("subverbs %v", v.Subverbs)
 			}
 			return

@@ -24,7 +24,8 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 1
 : The answer is no: search or search-set found nothing, or every set is ignored; forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents; completion
-  -uninstall found nothing, or -check found a problem.
+  -uninstall found nothing, or -check found a problem; indexer discover found
+  no published index.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
@@ -33,7 +34,8 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 
 65
 : The file is not a corpus or has a newer schema; a source is malformed; an
-  index is damaged (a file does not match its digest, or the manifest is wrong).
+  index is damaged (a file does not match its digest, or the manifest is wrong);
+  a site's cmarkfind.json is wrong.
 
 66
 : A folder, the corpus (for search and stats) or a table of contents is missing;
