@@ -35,12 +35,13 @@ cmarkfind stats</code></pre>
 <code>fill -batch 25 -every 1h -until-done</code>. Each site is an index
 set with an index of its own: <code>search</code> reads every set,
 <code>search-set NAME</code> reads one, and <code>set ignore NAME</code>
-leaves a near-duplicate copy out of a lookup. <code>exclude</code> keeps
-an address prefix out of the corpus; <code>forget</code> deletes a
-site’s pages. <code>pin</code> puts a page first among the matches and
-<code>tag</code> gives it your own words; <code>search -pinned</code>
-and <code>search -tag</code> find them again.
-<code>cmarkfind -help</code> is the manual;
+leaves a near-duplicate copy out of a lookup. A folder of notes with no
+outline is read with <code>fill -name NAME FOLDER</code> and searched
+like any site. <code>exclude</code> keeps an address prefix out of the
+corpus; <code>forget</code> deletes a site’s pages. <code>pin</code>
+puts a page first among the matches and <code>tag</code> gives it your
+own words; <code>search -pinned</code> and <code>search -tag</code> find
+them again. <code>cmarkfind -help</code> is the manual;
 <code>cmarkfind help index</code> lists the topics (one for each verb,
 and the query syntax, the corpus and the exit codes);
 <code>cmarkfind help TOPIC</code> shows one.</p>

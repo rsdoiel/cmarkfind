@@ -105,12 +105,19 @@ func (o *out) setShow(ctx context.Context, dbFile string, args []string) error {
 			fields = "default"
 		}
 		if o.json {
-			b, _ := json.Marshal(map[string]any{"name": s.Name, "source": s.Source, "pages": s.Pages, "ignored": s.Ignored,
-				"fields": fields, "fields_version": s.FieldsVersion, "index": s.IndexDir, "built": s.Built})
+			m := map[string]any{"name": s.Name, "source": s.Source, "pages": s.Pages, "ignored": s.Ignored,
+				"fields": fields, "fields_version": s.FieldsVersion, "index": s.IndexDir, "built": s.Built}
+			if s.Root != "" {
+				m["root"] = s.Root
+			}
+			b, _ := json.Marshal(m)
 			fmt.Fprintf(o.stdout, "%s\n", b)
 			return nil
 		}
 		fmt.Fprintf(o.stdout, "name %s\nsource %s\npages %d\nignored %t\nfields %s\nindex %s\nbuilt %t\n", s.Name, s.Source, s.Pages, s.Ignored, fields, s.IndexDir, s.Built)
+		if s.Root != "" {
+			fmt.Fprintf(o.stdout, "root %s\n", s.Root)
+		}
 		return nil
 	}
 	return fmt.Errorf("%w: %s", corpus.ErrNoSet, fset.Arg(0))

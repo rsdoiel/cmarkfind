@@ -41,6 +41,7 @@ var (
  *   FieldsVersion (int)   — the blob's version
  *   IndexDir (string)     — the folder the set's index is kept in
  *   Built (bool)          — whether the folder holds an index
+ *   Root (string)         — the folder a collection was filled from; empty for any other set
  *
  * Example:
  *   for _, s := range sets { fmt.Println(s.Name, s.Pages, s.Ignored) }
@@ -54,6 +55,7 @@ type SetInfo struct {
 	FieldsVersion int
 	IndexDir      string
 	Built         bool
+	Root          string // the folder of a collection; empty for any other set
 }
 
 // ensureSets makes the sets table agree with the pages: a set for every site
@@ -142,7 +144,8 @@ func (d *DB) Sets(ctx context.Context) ([]SetInfo, error) {
 	}
 	rows, err := d.sql.QueryContext(ctx, `
 SELECT s.site, s.source, s.ignored, s.fields_version, s.fields,
-       (SELECT count(*) FROM pages p WHERE p.site = s.site AND p.gone_at = '')
+       (SELECT count(*) FROM pages p WHERE p.site = s.site AND p.gone_at = ''),
+       coalesce((SELECT root FROM collections c WHERE c.name = s.site), '')
 FROM sets s ORDER BY s.site`)
 	if err != nil {
 		return nil, classify(err)
@@ -152,7 +155,7 @@ FROM sets s ORDER BY s.site`)
 	for rows.Next() {
 		var s SetInfo
 		var ign int
-		if err := rows.Scan(&s.Name, &s.Source, &ign, &s.FieldsVersion, &s.Fields, &s.Pages); err != nil {
+		if err := rows.Scan(&s.Name, &s.Source, &ign, &s.FieldsVersion, &s.Fields, &s.Pages, &s.Root); err != nil {
 			return nil, classify(err)
 		}
 		s.Ignored = ign != 0

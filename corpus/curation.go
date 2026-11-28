@@ -54,7 +54,7 @@ func (d *DB) forget(ctx context.Context, site string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	for _, q := range []string{`DELETE FROM attempts WHERE site = ?`, `DELETE FROM sites WHERE site = ?`} {
+	for _, q := range []string{`DELETE FROM attempts WHERE site = ?`, `DELETE FROM sites WHERE site = ?`, `DELETE FROM collections WHERE name = ?`} {
 		if _, err := tx.ExecContext(ctx, q, site); err != nil {
 			return 0, classify(err)
 		}
@@ -93,7 +93,7 @@ func (d *DB) forgetAll(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	for _, q := range []string{`DELETE FROM attempts`, `DELETE FROM sites`} {
+	for _, q := range []string{`DELETE FROM attempts`, `DELETE FROM sites`, `DELETE FROM collections`} {
 		if _, err := tx.ExecContext(ctx, q); err != nil {
 			return 0, classify(err)
 		}
@@ -258,8 +258,10 @@ func (d *DB) excludedBy(ctx context.Context) (func(string) bool, error) {
 
 func validPrefix(p string) error {
 	u, err := url.Parse(p)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || strings.ContainsAny(p, " \t\r\n") {
-		return fmt.Errorf("%w: %q is not an http or https address", ErrBadPrefix, p)
+	web := u != nil && (u.Scheme == "http" || u.Scheme == "https")
+	coll := u != nil && u.Scheme == "collection" && ValidCollectionName(u.Host)
+	if err != nil || !(web || coll) || u.Host == "" || strings.ContainsAny(p, " \t\r\n") {
+		return fmt.Errorf("%w: %q is not an http or https address, or a collection:// address", ErrBadPrefix, p)
 	}
 	return nil
 }

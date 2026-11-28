@@ -152,7 +152,15 @@ func (d *DB) fillLocal(ctx context.Context, root string, lim toc.Limits, base *u
 	if err != nil {
 		return nil, err
 	}
-	rep := &FillReport{Complete: l.Complete}
+	return d.storeLocal(ctx, abs, l, base, &FillReport{})
+}
+
+// storeLocal stores the pages of a listing of files on disk under the site key
+// abs, marks the site's pages the listing no longer holds as gone (when the
+// listing is complete) and records how many pages it listed. rep carries the
+// counts a caller already has; it is returned.
+func (d *DB) storeLocal(ctx context.Context, abs string, l *toc.Listing, base *url.URL, rep *FillReport) (*FillReport, error) {
+	rep.Complete = l.Complete
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, classify(err)

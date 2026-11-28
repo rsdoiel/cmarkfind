@@ -175,6 +175,18 @@ it is.</li>
 tables). An older cmarkbrowser exits 65 on a version 6 file; move it to
 this cmarkfind first. New help topics <code>set</code> and
 <code>search-set</code>.</li>
+<li>Collections: <code>fill -name NAME FOLDER</code> reads a folder of
+Markdown files with no outline (<code>.md</code> and
+<code>.markdown</code>, any depth; dot files and folders, symbolic links
+and files over 8 MiB are left out) as the collection NAME, stored under
+<code>collection://NAME/relative/path.md</code>. A collection is an
+index set: <code>search-set NAME</code>, <code>set ignore NAME</code>,
+<code>exclude collection://NAME/drafts/</code>,
+<code>forget NAME</code>. The folder is remembered; another folder under
+the same name is refused until <code>forget</code>. A program opens a
+page with <code>corpus.CollectionFile</code>, which refuses
+<code>..</code>, encoded <code>..</code> and symbolic links out of the
+folder. <code>set show</code> names a collection’s folder.</li>
 </ul>
 <h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>

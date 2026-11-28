@@ -20,7 +20,7 @@ cmarkfind forget -all
 # DESCRIPTION
 
 Delete the pages stored from one site (a folder or an address, named as for
-cmarkfind-fill(7)), or every page. The site's set (cmarkfind-set(7)) and its
+cmarkfind-fill(7); a collection by its name), or every page. The site's set (cmarkfind-set(7)) and its
 index go with its pages. Exclusions are kept, so a later fill does not bring back
 what exclude keeps out.
 

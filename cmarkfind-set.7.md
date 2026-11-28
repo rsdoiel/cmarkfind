@@ -41,7 +41,8 @@ A name that fits more than one set (the http and https of one host) is
 refused and the candidates are listed.
 
 list names every set with its source, its pages and whether it is ignored.
-show says what one holds, where its index is and its field mapping. ignore
+show says what one holds, where its index is, its field mapping and, for a
+collection (cmarkfind-fill(7)), the folder it reads. ignore
 leaves a set out of search, so a near copy of a site you are not interested in
 does not fill a lookup with duplicates; search-set still reaches it. unignore
 puts it back. Nothing is ignored until you say so.

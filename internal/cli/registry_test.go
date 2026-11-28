@@ -78,7 +78,7 @@ func flagNames(fl []flagInfo) string {
 // The flags are read from the verbs' own FlagSets, so the table cannot drift.
 func TestVerbFlagsAreReadFromTheVerbs(t *testing.T) {
 	cases := map[string]string{
-		"fill":          "batch depth every json max-pages pause robots site-url until-done user-agent",
+		"fill":          "batch depth every json max-pages name pause robots site-url until-done user-agent",
 		"search":        "json limit pinned tag",
 		"search-set":    "json limit pinned tag",
 		"set fields":    "json reset",

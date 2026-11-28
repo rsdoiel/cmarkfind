@@ -15,6 +15,8 @@ cmarkfind-fill — read a site's pages into the corpus
 
 cmarkfind fill [OPTIONS] SOURCE
 
+cmarkfind fill -name NAME [OPTIONS] FOLDER
+
 # DESCRIPTION
 
 Read the pages a site's table of contents (/.well-known/toc.opml) lists and
@@ -25,6 +27,18 @@ Pages already stored are asked for again only if they changed: the web fill
 sends If-None-Match and takes a 304 as unchanged. A page the table of contents
 no longer lists is marked gone and is not searched. A page that is excluded (see
 cmarkfind-exclude(7)) is neither stored nor requested.
+
+A folder of Markdown files that is not a web site and has no outline (your notes,
+a project's documents) is read with -name: every .md and .markdown file under
+the folder becomes a page of the collection NAME, stored under
+collection://NAME/path/to/file.md (the path is relative to the folder, with /
+on every system, each part percent-encoded, so there is no drive letter and the
+address does not change when the folder moves). A collection is an index set like
+any other (cmarkfind-set(7)): search it with search-set NAME, or with the rest
+with search. Files and folders whose names start with a dot, symbolic links and
+files over 8 MiB are not read. The folder is remembered: fill -name NAME again
+rereads it, and another folder under the same name is refused until forget NAME.
+A relative link in a page resolves against its collection:// address.
 
 The web fill is polite. It waits between requests to one host, names itself in
 the User-Agent, and obeys robots.txt.
@@ -46,7 +60,7 @@ itself.
 : The User-Agent sent. Default cmarkfind/VERSION.
 
 -max-pages N
-: List at most N pages from the table of contents.
+: List at most N pages from the table of contents (with -name, read at most N files).
 
 -depth N
 : Follow included outlines N levels.
@@ -56,6 +70,11 @@ itself.
   path prefix) whatever the outline lists, keeping each page's own path. Needs
   an http or https address with no query or fragment; exit 2 otherwise, or with a
   web site. Filling again with another address marks the old ones gone.
+
+-name NAME
+: Read FOLDER as the collection NAME (1 to 40 of a-z, 0-9, - and _, starting
+  with a letter or digit), whatever outline it holds. Exit 2 with -site-url,
+  -depth, -batch or a web address.
 
 -batch N
 : Ask about at most N pages, then stop (web sites only).

@@ -202,11 +202,17 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 	every := fset.Duration("every", 0, "")
 	untilDone := fset.Bool("until-done", false, "")
 	siteURL := fset.String("site-url", "", "")
+	name := fset.String("name", "", "")
 	every0 := false
 	if err := parse(fset, args, o, j); err != nil {
 		return err
 	}
-	fset.Visit(func(f *flag.Flag) { every0 = every0 || f.Name == "every" })
+	named, depthSet := false, false
+	fset.Visit(func(f *flag.Flag) {
+		every0 = every0 || f.Name == "every"
+		named = named || f.Name == "name"
+		depthSet = depthSet || f.Name == "depth"
+	})
 	if fset.NArg() != 1 {
 		return fmt.Errorf("%w: fill takes one SOURCE, a folder or an http(s) address", ErrUsage)
 	}
@@ -231,6 +237,18 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 		}
 		if _, err := corpus.ParseSiteURL(*siteURL); err != nil {
 			return fmt.Errorf("%w: -site-url: %v", ErrUsage, err)
+		}
+	}
+	if named {
+		switch {
+		case remote:
+			return fmt.Errorf("%w: -name is for a folder of Markdown files, not a web site", ErrUsage)
+		case *siteURL != "":
+			return fmt.Errorf("%w: -name and -site-url do not go together: a collection has no published address", ErrUsage)
+		case depthSet:
+			return fmt.Errorf("%w: -depth is for outlines; a collection reads every file under the folder", ErrUsage)
+		case !corpus.ValidCollectionName(*name):
+			return fmt.Errorf("%w: -name %q: 1 to 40 of a-z, 0-9, - and _, starting with a letter or digit", ErrUsage, *name)
 		}
 	}
 	if !remote && *batch > 0 {
@@ -259,6 +277,14 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 		return fmt.Errorf("%w: %v", ErrCantCreate, err)
 	}
 	defer db.Close()
+	if named {
+		rep, err := db.FillCollection(ctx, *name, src, lim)
+		if rep != nil {
+			o.report(rep, false)
+		}
+		o.indexWarnings(db)
+		return err
+	}
 	if !remote {
 		rep, err := db.FillLocalWith(ctx, src, lim, corpus.FillOptions{SiteURL: *siteURL})
 		if rep != nil {
@@ -546,19 +572,25 @@ func (o *out) forget(ctx context.Context, dbFile string, args []string) error {
 	if (*all && fset.NArg() != 0) || (!*all && fset.NArg() != 1) {
 		return fmt.Errorf("%w: forget takes one SITE, or -all", ErrUsage)
 	}
-	site := ""
-	if !*all {
-		_, key, err := source(fset.Arg(0))
-		if err != nil {
-			return err
-		}
-		site = key
-	}
 	db, err := openExisting(dbFile)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	site := ""
+	if !*all {
+		if isColl, cerr := db.HasCollection(ctx, fset.Arg(0)); cerr != nil {
+			return cerr
+		} else if isColl {
+			site = fset.Arg(0) // a collection is named by its name
+		} else {
+			_, key, err := source(fset.Arg(0))
+			if err != nil {
+				return err
+			}
+			site = key
+		}
+	}
 	var n int
 	switch {
 	case *dry && *all:
