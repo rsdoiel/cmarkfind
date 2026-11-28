@@ -78,6 +78,7 @@ type Results struct {
 	Searched int
 	Filtered int
 	Pending  int
+	Total    int // every match of the sets searched, after curation, whatever Offset and Limit cut (a query search; 0 for a filter listing)
 }
 
 /** SearchOptions are the options of SearchWith.
@@ -95,6 +96,9 @@ type SearchOptions struct {
 	Tags   []string
 	Pinned bool
 	Set    string // search only this set (a site key as ResolveSet returns it); empty searches every set not ignored
+
+	Offset  int  // hits to skip before the Limit hits returned (a query search); 0 starts at the best
+	NoBuild bool // never build an index on the way: a set that needs one is left out (ErrNeedsBuild when it is the one named)
 }
 
 const hitColumns = `p.address, p.title, p.site, p.tier, EXISTS(SELECT 1 FROM pins k WHERE k.address = p.address)`
