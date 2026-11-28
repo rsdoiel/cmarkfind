@@ -65,7 +65,7 @@ func (d *DB) ensureSets(ctx context.Context) error {
 	if _, err := d.sql.ExecContext(ctx, `INSERT OR IGNORE INTO sets(site, source, added_at) SELECT DISTINCT site, 'local', ? FROM pages WHERE site <> ''`, stamp()); err != nil {
 		return classify(err)
 	}
-	rows, err := d.sql.QueryContext(ctx, `SELECT site FROM sets WHERE site NOT IN (SELECT DISTINCT site FROM pages)`)
+	rows, err := d.sql.QueryContext(ctx, `SELECT site FROM sets WHERE source = 'local' AND site NOT IN (SELECT DISTINCT site FROM pages)`)
 	if err != nil {
 		return classify(err)
 	}
@@ -163,6 +163,11 @@ FROM sets s ORDER BY s.site`)
 		s.IndexDir = d.SetIndexDir(s.Name)
 		_, ferr := os.Stat(filepath.Join(s.IndexDir, "manifest.json"))
 		s.Built = ferr == nil
+		if s.Source != "local" && s.Built { // a published index holds the pages, not the corpus
+			if ix, err := index.Open(s.IndexDir); err == nil {
+				s.Pages = ix.Count()
+			}
+		}
 		out = append(out, s)
 	}
 	return out, classify(rows.Err())
@@ -286,6 +291,9 @@ func (d *DB) IgnoreSet(ctx context.Context, site string, ignored bool) error {
  */
 func (d *DB) SetFields(ctx context.Context, site string, version int, blob string) error {
 	if err := d.ensureSets(ctx); err != nil {
+		return err
+	}
+	if err := d.refuseRemoteSet(ctx, site); err != nil {
 		return err
 	}
 	res, err := d.sql.ExecContext(ctx, `UPDATE sets SET fields_version = ?, fields = ? WHERE site = ?`, version, blob, site)
@@ -418,11 +426,11 @@ func (d *DB) BuildSets(ctx context.Context, site string, chunk int) (*SetBuild, 
 	}
 	var todo []string
 	for _, s := range sets {
-		if site == "" || s.Name == site {
+		if (site == "" || s.Name == site) && s.Source == "local" { // a mirror or reference is never built here
 			todo = append(todo, s.Name)
 		}
 	}
-	if site != "" && len(todo) == 0 {
+	if site != "" && len(todo) == 0 && !hasSet(sets, site) {
 		return nil, fmt.Errorf("%w: %s", ErrNoSet, site)
 	}
 	out := &SetBuild{}
@@ -444,11 +452,14 @@ func (d *DB) BuildSets(ctx context.Context, site string, chunk int) (*SetBuild, 
 // its opened index and whether it was written.
 func (d *DB) buildSet(ctx context.Context, site string, chunk int, force bool) (*index.Index, bool, error) {
 	var version, gen int
-	var fields, stored, oldOnly string
-	err := d.sql.QueryRowContext(ctx, `SELECT fields_version, fields, input_digest, generation, document_only FROM sets WHERE site = ?`, site).
-		Scan(&version, &fields, &stored, &gen, &oldOnly)
+	var fields, stored, oldOnly, source string
+	err := d.sql.QueryRowContext(ctx, `SELECT fields_version, fields, input_digest, generation, document_only, source FROM sets WHERE site = ?`, site).
+		Scan(&version, &fields, &stored, &gen, &oldOnly, &source)
 	if err != nil {
 		return nil, false, classify(err)
+	}
+	if source != "local" {
+		return nil, false, fmt.Errorf("%w: %s", ErrRemoteSet, site) // its index is the publisher's, not built here
 	}
 	skip, err := d.excludedBy(ctx)
 	if err != nil {
@@ -547,6 +558,9 @@ func (d *DB) currentSet(ctx context.Context, site string) (*index.Index, error) 
 	}
 	if err != nil {
 		return nil, classify(err)
+	}
+	if source != "local" {
+		return d.openRemoteSet(ctx, site, source)
 	}
 	ix, oerr := index.Open(d.SetIndexDir(site))
 	if oerr == nil && int(ix.Generation()) == gen && gen > 0 {
@@ -655,4 +669,14 @@ func plural1(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// hasSet reports whether sets holds one of that name.
+func hasSet(sets []SetInfo, name string) bool {
+	for _, s := range sets {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
 }

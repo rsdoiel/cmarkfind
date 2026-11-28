@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/rsdoiel/markdownweb/fetch"
 	"net/url"
 	"strconv"
 	"sync"
@@ -85,6 +86,7 @@ type DB struct {
 	mu       sync.Mutex
 	warnings []string
 	report   *index.BuildReport
+	fetchOpt fetch.Options // how a reference and a refresh reach the web; see SetFetchOptions
 }
 
 /** Open opens the corpus at path, creating it when the file does not exist.

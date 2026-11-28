@@ -190,6 +190,8 @@ cmarkfind indexer [list] [SET]
 
 cmarkfind indexer discover SITE
 
+cmarkfind indexer add [-reference] SITE
+
 # DESCRIPTION
 
 An index is a folder of compressed files, made from the pages of one set
@@ -220,6 +222,29 @@ is not there, discover tries /cmarkfind/manifest.json. A site that names a
 manifest that is missing is not searched at the default path instead. It
 prints the manifest's address, how it was found, and the generation, page
 count and build time the manifest declares.
+
+add makes a set from the index a site publishes, so that a site can be searched
+without reading its pages. By default the set is a mirror: the index's files
+are fetched, checked against the digests in its manifest and kept in the set's
+folder, and the set searches offline. With -reference it is a reference: only
+the manifest is kept (checked first), and every search fetches the files it
+reads, checking each one against the manifest, so it needs the site to be
+reachable and always reads the stored generation. Either way no page of the
+site is in the corpus: a hit shows the title and snippet the index holds, its
+tier is the set's source (mirror or reference), and pins, tags and exclusions
+apply to it by address as to any hit. An exclusion drops the hit at search
+time and leaves the published index as it is. The set is named as a fill of the
+same site would name it, by the address of its outline
+(https://example.org/.well-known/toc.opml), or by the manifest's address when
+add is given one, so a site cannot be both filled and mirrored: add of a name
+that is already a set exits 73, and fill of a mirror or reference exits 1. forget
+removes a mirror or reference with its folder, set ignore leaves it out of
+search, and set fields is refused (its field mapping is the publisher's).
+
+A mirror or reference that cannot be read when searching (the site is down, or a
+file fails its digest) is left out of search with a warning on standard error,
+and the others are searched. search-set of it fails with the cause. A search in
+which every set failed exits with the class of the first failure.
 
 A word on a great many pages (a very common word such as "the", in any
 language) can make its entry too big for one index file. Over about 2 MiB an
@@ -265,6 +290,9 @@ search. A folder with no owner file goes to the first corpus that builds in it.
 -chunk N
 : Entries per word file when building. Default 10000.
 
+-reference
+: With add: keep only the manifest and fetch the files at each search.
+
 -json
 : Write the result as JSON.
 
@@ -277,7 +305,11 @@ discover exits 1 when the site publishes no index (or its cmarkfind.json names
 a manifest that is missing), 2 for a missing or bad address, 65 when its
 cmarkfind.json or manifest is wrong (another origin, not a manifest.json, a
 repeated key, over 64 KiB, a format or analyzer this program does not know),
-and 69 when the site cannot be reached. See cmarkfind-exit-status(7).
+and 69 when the site cannot be reached. add exits 2 for a missing or bad
+address, 66 when the site publishes no index, 65 when the index fails
+verification or needs a feature or analyzer this program lacks, 69 when the site
+cannot be reached, and 73 when the name is already a set; a failure leaves no
+set and no files behind. See cmarkfind-exit-status(7).
 
 # EXAMPLES
 
@@ -285,6 +317,8 @@ and 69 when the site cannot be reached. See cmarkfind-exit-status(7).
     cmarkfind indexer build rsdoiel.github.io
     cmarkfind indexer validate
     cmarkfind indexer discover https://example.org/
+    cmarkfind indexer add https://example.org/
+    cmarkfind indexer add -reference https://example.org/
 
 # SEE ALSO
 
@@ -884,7 +918,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : The answer is no: search or search-set found nothing, or every set is ignored; forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents; completion
   -uninstall found nothing, or -check found a problem; indexer discover found
-  no published index.
+  no published index; fill of a site whose set is a mirror or reference.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
@@ -894,11 +928,12 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 65
 : The file is not a corpus or has a newer schema; a source is malformed; an
   index is damaged (a file does not match its digest, or the manifest is wrong);
-  a site's cmarkfind.json is wrong.
+  a site's cmarkfind.json is wrong; an index to add or mirror fails verification.
 
 66
 : A folder, the corpus (for search and stats) or a table of contents is missing;
-  a set is not known; an index is missing (no manifest.json in its folder).
+  a set is not known; an index is missing (no manifest.json in its folder), or
+  a site publishes none (indexer add).
 
 69
 : The site cannot be reached.
@@ -909,7 +944,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 73
 : The corpus file or its directory, or an index's directory, cannot be created;
   completion's script or its directory cannot be created, or a file cmarkfind did
-  not write is in the way.
+  not write is in the way; indexer add of a name that is already a set.
 
 74
 : A read or write failed part way: completion's startup file.

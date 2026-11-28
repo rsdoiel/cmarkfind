@@ -275,12 +275,26 @@ const rrfK = 60
 // first, then the fused score, tier and address; cut at limit, with a bracketed
 // snippet each. The pinned and tag sets filter before ranking. With aggregate,
 // a set whose analyzer this program does not read is left out with a warning.
-func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int) ([]Hit, []FacetField, error) {
+func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int, opts SearchOptions) ([]Hit, []FacetField, error) {
 	// open each set's index first: a query's field clauses are parsed for the
 	// union of the fields the sets offer, and a set that lacks one matches nothing for it
 	type opened struct {
-		site string
-		ix   *index.Index
+		site   string
+		source string
+		ix     *index.Index
+	}
+	sources, err := d.sourcesOf(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	var firstFail error // the first mirror or reference that could not be read (DR-0017 item 4)
+	leftOut := func(site string, err error) {
+		d.mu.Lock()
+		d.warnings = append(d.warnings, fmt.Sprintf("set %s left out of the search: %v", site, err))
+		d.mu.Unlock()
+		if firstFail == nil {
+			firstFail = err
+		}
 	}
 	var sets []opened
 	fieldSet := map[string]bool{}
@@ -295,10 +309,14 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 			d.mu.Unlock()
 			continue
 		}
+		if err != nil && aggregate && sources[site] != "local" {
+			leftOut(site, err)
+			continue
+		}
 		if err != nil {
 			return nil, nil, err
 		}
-		sets = append(sets, opened{site, ix})
+		sets = append(sets, opened{site, sources[site], ix})
 		for _, f := range ix.DateFields() {
 			if !dateSeen[f] {
 				dateSeen[f] = true
@@ -312,6 +330,9 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 			}
 		}
 	}
+	if len(sets) == 0 && firstFail != nil {
+		return nil, nil, firstFail
+	}
 	node, err := index.ParseQueryFields(query, fields, dateFields)
 	if err != nil {
 		return nil, nil, err
@@ -319,6 +340,11 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 	if node == nil {
 		return nil, nil, nil
 	}
+	excluded, err := d.excludedBy(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	readable := 0
 	var ok map[string]bool
 	if frag != "" {
 		if ok, err = d.passing(ctx, frag, fargs); err != nil {
@@ -326,18 +352,63 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		}
 	}
 	type cand struct {
-		h     index.Hit
-		ix    *index.Index
-		fused float64
+		h         index.Hit
+		ix        *index.Index
+		fused     float64
+		fromIndex bool // a mirror's or reference's hit: its title is the index's
 	}
 	var all []*cand
 	var found4facets []setHits
 	meta := map[string]pageMeta{}
+	// finish ranks one set's candidates among themselves and adds them to the
+	// whole (reciprocal rank fusion: each set is ranked alone, cmarkfind DR-0006 item 8)
+	finish := func(mine []*cand, site string, ix *index.Index) {
+		score := func(h index.Hit) float64 { return float64(int64(h.Score*100+0.5)) / 100 }
+		sort.SliceStable(mine, func(i, j int) bool {
+			a, b := mine[i].h, mine[j].h
+			if score(a) != score(b) {
+				return score(a) > score(b)
+			}
+			if ra, rb := rankOf(meta[a.Address].tier), rankOf(meta[b.Address].tier); ra != rb {
+				return ra < rb
+			}
+			return a.Address < b.Address
+		})
+		for i, c := range mine {
+			c.fused = 1 / float64(rrfK+i+1)
+		}
+		docs := make(map[int]bool, len(mine))
+		for _, c := range mine {
+			docs[c.h.Doc] = true
+		}
+		found4facets = append(found4facets, setHits{site: site, ix: ix, docs: docs})
+		all = append(all, mine...)
+	}
 	for _, set := range sets {
 		ix := set.ix
 		found, err := ix.Search(node, 0)
+		if err != nil && aggregate && set.source != "local" {
+			leftOut(set.site, err)
+			continue
+		}
 		if err != nil {
 			return nil, nil, err
+		}
+		readable++
+		if set.source != "local" {
+			mine, err := d.publishedHits(ctx, set.site, set.source, found, opts, excluded)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, c := range mine {
+				meta[c.Address] = pageMeta{site: set.site, tier: set.source, pinned: c.Pinned}
+			}
+			cs := make([]*cand, len(mine))
+			for i, c := range mine {
+				cs[i] = &cand{h: c.Hit, ix: ix, fromIndex: true}
+			}
+			finish(cs, set.site, ix)
+			continue
 		}
 		if ok != nil {
 			kept := found[:0]
@@ -363,26 +434,10 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 				mine = append(mine, &cand{h: h, ix: ix})
 			}
 		}
-		score := func(h index.Hit) float64 { return float64(int64(h.Score*100+0.5)) / 100 }
-		sort.SliceStable(mine, func(i, j int) bool {
-			a, b := mine[i].h, mine[j].h
-			if score(a) != score(b) {
-				return score(a) > score(b)
-			}
-			if ra, rb := rankOf(meta[a.Address].tier), rankOf(meta[b.Address].tier); ra != rb {
-				return ra < rb
-			}
-			return a.Address < b.Address
-		})
-		for i, c := range mine {
-			c.fused = 1 / float64(rrfK+i+1)
-		}
-		docs := make(map[int]bool, len(mine))
-		for _, c := range mine {
-			docs[c.h.Doc] = true
-		}
-		found4facets = append(found4facets, setHits{site: set.site, ix: ix, docs: docs})
-		all = append(all, mine...)
+		finish(mine, set.site, ix)
+	}
+	if readable == 0 && firstFail != nil {
+		return nil, nil, firstFail
 	}
 	sort.SliceStable(all, func(i, j int) bool {
 		a, b := all[i], all[j]
@@ -412,7 +467,13 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		if err != nil {
 			return nil, nil, err
 		}
-		hits = append(hits, Hit{Address: c.h.Address, Title: m.title, Site: m.site, Tier: m.tier, Snippet: snip, Anchor: anchor, Pinned: m.pinned})
+		title := m.title
+		if c.fromIndex {
+			if fr, err := c.ix.Fragment(c.h.Doc); err == nil {
+				title = fr.Title
+			}
+		}
+		hits = append(hits, Hit{Address: c.h.Address, Title: title, Site: m.site, Tier: m.tier, Snippet: snip, Anchor: anchor, Pinned: m.pinned})
 	}
 	return hits, facets, nil
 }
@@ -462,4 +523,142 @@ func snippet(ix *index.Index, n *index.Node, doc int) (string, string, error) {
 		}
 	}
 	return b.String(), anchor, nil
+}
+
+// sourcesOf is each set's source, by name.
+func (d *DB) sourcesOf(ctx context.Context) (map[string]string, error) {
+	rows, err := d.sql.QueryContext(ctx, `SELECT site, source FROM sets`)
+	if err != nil {
+		return nil, classify(err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var site, src string
+		if err := rows.Scan(&site, &src); err != nil {
+			return nil, classify(err)
+		}
+		out[site] = src
+	}
+	return out, classify(rows.Err())
+}
+
+// publishedHit is a hit of a mirror or reference with what curation says of its address.
+type publishedHit struct {
+	index.Hit
+	Pinned bool
+}
+
+// publishedHits applies curation, by address, to the hits of a published index
+// (cmarkfind DR-0017 item 3): an excluded address is dropped, the tag and pinned
+// options keep the addresses that pass them, and each hit says whether it is pinned.
+// Nothing here needs a row in pages.
+func (d *DB) publishedHits(ctx context.Context, site, source string, found []index.Hit, opts SearchOptions, excluded func(string) bool) ([]publishedHit, error) {
+	var addrs []string
+	var kept []index.Hit
+	for _, h := range found {
+		if !excluded(h.Address) {
+			kept = append(kept, h)
+			addrs = append(addrs, h.Address)
+		}
+	}
+	pass, err := d.passByAddress(ctx, opts, addrs)
+	if err != nil {
+		return nil, err
+	}
+	pinned, err := d.pinnedAmong(ctx, addrs)
+	if err != nil {
+		return nil, err
+	}
+	var out []publishedHit
+	for _, h := range kept {
+		if pass != nil && !pass[h.Address] {
+			continue
+		}
+		out = append(out, publishedHit{Hit: h, Pinned: pinned[h.Address]})
+	}
+	return out, nil
+}
+
+// byAddress runs a query that selects addresses, for the addresses given, in batches.
+func (d *DB) byAddress(ctx context.Context, addrs []string, query string, extra []any) (map[string]bool, error) {
+	out := map[string]bool{}
+	const batch = 500
+	for i := 0; i < len(addrs); i += batch {
+		part := addrs[i:min(i+batch, len(addrs))]
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(part)), ",")
+		args := make([]any, 0, len(part)+len(extra))
+		for _, a := range part {
+			args = append(args, a)
+		}
+		args = append(args, extra...)
+		rows, err := d.sql.QueryContext(ctx, strings.Replace(query, "(@)", "("+marks+")", 1), args...)
+		if err != nil {
+			return nil, classify(err)
+		}
+		for rows.Next() {
+			var a string
+			if err := rows.Scan(&a); err != nil {
+				rows.Close()
+				return nil, classify(err)
+			}
+			out[a] = true
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, classify(err)
+		}
+	}
+	return out, nil
+}
+
+// pinnedAmong are the addresses of addrs that are pinned.
+func (d *DB) pinnedAmong(ctx context.Context, addrs []string) (map[string]bool, error) {
+	return d.byAddress(ctx, addrs, `SELECT address FROM pins WHERE address IN (@)`, nil)
+}
+
+// passByAddress are the addresses of addrs that pass the tag and pinned options
+// (nil when there are none: everything passes), as filterSQL says of pages.
+func (d *DB) passByAddress(ctx context.Context, o SearchOptions, addrs []string) (map[string]bool, error) {
+	tags, err := foldTags(o.Tags)
+	if err != nil {
+		return nil, err
+	}
+	if !o.Pinned && len(tags) == 0 {
+		return nil, nil
+	}
+	pass := map[string]bool{}
+	for _, a := range addrs {
+		pass[a] = true
+	}
+	if o.Pinned {
+		pins, err := d.pinnedAmong(ctx, addrs)
+		if err != nil {
+			return nil, err
+		}
+		for a := range pass {
+			if !pins[a] {
+				delete(pass, a)
+			}
+		}
+	}
+	if len(tags) > 0 {
+		sort.Strings(tags)
+		marks := strings.TrimSuffix(strings.Repeat("?,", len(tags)), ",")
+		args := make([]any, 0, len(tags)+1)
+		for _, t := range tags {
+			args = append(args, t)
+		}
+		args = append(args, len(tags))
+		all, err := d.byAddress(ctx, addrs, `SELECT address FROM tags WHERE address IN (@) AND tag IN (`+marks+`) GROUP BY address HAVING count(*) = ?`, args)
+		if err != nil {
+			return nil, err
+		}
+		for a := range pass {
+			if !all[a] {
+				delete(pass, a)
+			}
+		}
+	}
+	return pass, nil
 }

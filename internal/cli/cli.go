@@ -189,7 +189,11 @@ func openExisting(path string) (*corpus.DB, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("no corpus at %s: %w", path, err)
 	}
-	return corpus.Open(path)
+	db, err := corpus.Open(path)
+	if err == nil {
+		db.SetFetchOptions(fetchOptions()) // a reference is read over the web at each search
+	}
+	return db, err
 }
 
 func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
@@ -304,6 +308,9 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 	f := fetch.New(fetch.Options{UserAgent: agent, Pause: *pause, Robots: *robots})
 	once := func() (*corpus.FillReport, error) {
 		rep, err := db.FillRemoteWith(ctx, f, tocURL, lim, corpus.FillOptions{Batch: *batch})
+		if errors.Is(err, corpus.ErrRemoteSet) { // the set is made from a published index; a fill is not for it
+			return nil, negative("%v", err)
+		}
 		if rep != nil {
 			o.report(rep, *batch > 0)
 		}

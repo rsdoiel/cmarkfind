@@ -25,7 +25,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : The answer is no: search or search-set found nothing, or every set is ignored; forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents; completion
   -uninstall found nothing, or -check found a problem; indexer discover found
-  no published index.
+  no published index; fill of a site whose set is a mirror or reference.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
@@ -35,11 +35,12 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 65
 : The file is not a corpus or has a newer schema; a source is malformed; an
   index is damaged (a file does not match its digest, or the manifest is wrong);
-  a site's cmarkfind.json is wrong.
+  a site's cmarkfind.json is wrong; an index to add or mirror fails verification.
 
 66
 : A folder, the corpus (for search and stats) or a table of contents is missing;
-  a set is not known; an index is missing (no manifest.json in its folder).
+  a set is not known; an index is missing (no manifest.json in its folder), or
+  a site publishes none (indexer add).
 
 69
 : The site cannot be reached.
@@ -50,7 +51,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 73
 : The corpus file or its directory, or an index's directory, cannot be created;
   completion's script or its directory cannot be created, or a file cmarkfind did
-  not write is in the way.
+  not write is in the way; indexer add of a name that is already a set.
 
 74
 : A read or write failed part way: completion's startup file.

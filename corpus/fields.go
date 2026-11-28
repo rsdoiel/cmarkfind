@@ -386,6 +386,9 @@ func (d *DB) AssignFields(ctx context.Context, site string, assignments []string
 	if err := d.ensureSets(ctx); err != nil {
 		return err
 	}
+	if err := d.refuseRemoteSet(ctx, site); err != nil {
+		return err
+	}
 	var parsed []assignment
 	for _, a := range assignments {
 		as, err := parseAssignment(a)

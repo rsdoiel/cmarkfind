@@ -164,6 +164,11 @@ func (d *DB) SearchWith(ctx context.Context, query string, opts SearchOptions) (
 	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM pages WHERE gone_at = '' AND site IN `+in, inArgs...).Scan(&res.Searched); err != nil {
 		return nil, classify(err)
 	}
+	if n, err := d.publishedPages(ctx, sites); err != nil {
+		return nil, err
+	} else {
+		res.Searched += n
+	}
 	if res.Pending, err = d.pending(ctx); err != nil {
 		return nil, err
 	}
@@ -178,7 +183,7 @@ func (d *DB) SearchWith(ctx context.Context, query string, opts SearchOptions) (
 	var hits []Hit
 	switch {
 	case strings.TrimSpace(query) != "":
-		hits, res.Facets, err = d.searchSets(ctx, sites, opts.Set == "", query, frag, fargs, limit)
+		hits, res.Facets, err = d.searchSets(ctx, sites, opts.Set == "", query, frag, fargs, limit, opts)
 	case filtered:
 		hits, err = d.run(ctx, fmt.Sprintf(listSQL, frag), append(append([]any{}, fargs...), limit))
 	default:

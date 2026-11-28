@@ -81,7 +81,7 @@ func Classify(err error) (int, string) {
 		return ExitConfig, "config"
 	case errors.Is(err, fs.ErrPermission):
 		return ExitNoPermission, "no_permission"
-	case errors.Is(err, ErrCantCreate), errors.Is(err, corpus.ErrIndex):
+	case errors.Is(err, ErrCantCreate), errors.Is(err, corpus.ErrIndex), errors.Is(err, corpus.ErrSetExists):
 		return ExitCantCreate, "cant_create"
 	case errors.Is(err, ErrIO):
 		return ExitIO, "io"

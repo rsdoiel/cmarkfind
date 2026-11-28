@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"testing/fstest"
 	"time"
 
 	"github.com/rsdoiel/cmarkfind/index"
@@ -304,4 +306,124 @@ func swap(stage, dir string) error {
 	}
 	os.RemoveAll(old)
 	return nil
+}
+
+// Reference is a Source whose manifest is a file on disk and whose every other
+// file is fetched; see NewReference.
+type Reference struct {
+	remote *Source
+	dir    string
+}
+
+/** NewReference makes the Source of a reference: manifest.json is read from dir
+ * (where StoreManifest put it) and every other file is fetched from the
+ * manifest's address each time it is read. The index reader checks each against
+ * the digest the stored manifest gives, so a server cannot swap a shard.
+ *
+ * Parameters:
+ *   ctx (context.Context)  — cancels every request
+ *   opts (fetch.Options)   — the fetcher's options; SameOrigin is always on
+ *   manifestURL (string)   — the address of the manifest.json the reference was made from
+ *   dir (string)           — the folder StoreManifest wrote
+ *
+ * Returns:
+ *   *Reference — an index.Source
+ *   error      — as NewSource
+ *
+ * Example:
+ *   src, err := remote.NewReference(ctx, fetch.Options{}, manifestURL, dir)
+ *   ix, err := index.OpenSource(src)
+ */
+func NewReference(ctx context.Context, opts fetch.Options, manifestURL, dir string) (*Reference, error) {
+	s, err := NewSource(ctx, opts, manifestURL)
+	if err != nil {
+		return nil, err
+	}
+	return &Reference{remote: s, dir: dir}, nil
+}
+
+// Open is fs.FS.
+func (r *Reference) Open(name string) (fs.File, error) {
+	if name == "manifest.json" {
+		return os.Open(filepath.Join(r.dir, "manifest.json"))
+	}
+	return r.remote.Open(name)
+}
+
+/** StoreManifest keeps the manifest of the index at manifestURL in dir as
+ * manifest.json: the whole of a reference. The manifest is checked first
+ * (format, analyzer, required features, caps) and stored only if it passes;
+ * a generation lower than the one stored is ErrRollback, an equal one changes
+ * nothing, and a failure leaves the stored manifest as it was.
+ *
+ * Parameters:
+ *   ctx (context.Context) — cancels the request
+ *   opts (fetch.Options)  — the fetcher's options; SameOrigin is always on
+ *   manifestURL (string)  — the address of the manifest.json
+ *   dir (string)          — the folder of the reference; made if it is not there
+ *
+ * Returns:
+ *   *Report — Generation, Changed and Files (1 when stored)
+ *   error   — as Mirror
+ *
+ * Example:
+ *   rep, err := remote.StoreManifest(ctx, fetch.Options{}, manifestURL, dir)
+ */
+func StoreManifest(ctx context.Context, opts fetch.Options, manifestURL, dir string) (*Report, error) {
+	var held *uint64
+	if ix, err := index.Open(dir); err == nil {
+		g := ix.Generation()
+		held = &g
+	}
+	src, err := NewSource(ctx, opts, manifestURL)
+	if err != nil {
+		return nil, err
+	}
+	f, err := src.Open("manifest.json")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("%w: no manifest at %s", index.ErrMissing, manifestURL)
+		}
+		return nil, err
+	}
+	raw, err := io.ReadAll(f)
+	f.Close()
+	if err != nil {
+		return nil, err
+	}
+	ix, err := index.OpenSource(fstest.MapFS{"manifest.json": &fstest.MapFile{Data: raw}}) // the checks, on the bytes to be stored
+	if err != nil {
+		return nil, err
+	}
+	gen := ix.Generation()
+	if held != nil {
+		switch {
+		case gen < *held:
+			return nil, fmt.Errorf("%w (published %d, held %d)", ErrRollback, gen, *held)
+		case gen == *held:
+			return &Report{Generation: gen}, nil
+		}
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	tmp, err := os.CreateTemp(dir, ".manifest-")
+	if err != nil {
+		return nil, err
+	}
+	_, werr := tmp.Write(raw)
+	cerr := tmp.Close()
+	if werr != nil || cerr != nil {
+		os.Remove(tmp.Name())
+		return nil, errors.Join(werr, cerr)
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		os.Remove(tmp.Name())
+		return nil, err
+	}
+	if err := os.Rename(tmp.Name(), filepath.Join(dir, "manifest.json")); err != nil {
+		os.Remove(tmp.Name())
+		return nil, err
+	}
+	return &Report{Generation: gen, Changed: true, Files: 1}, nil
 }

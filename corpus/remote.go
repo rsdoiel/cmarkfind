@@ -94,6 +94,9 @@ func (d *DB) FillRemoteWith(ctx context.Context, f *fetch.Fetcher, tocURL string
 }
 
 func (d *DB) fillRemoteWith(ctx context.Context, f *fetch.Fetcher, tocURL string, lim toc.Limits, opts FillOptions) (*FillReport, error) {
+	if err := d.refuseRemoteSet(ctx, tocURL); err != nil {
+		return nil, err
+	}
 	if f == nil {
 		f = page.Fetcher()
 	}

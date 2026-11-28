@@ -6,8 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 
 	"github.com/rsdoiel/cmarkfind"
+	"github.com/rsdoiel/cmarkfind/corpus"
+	"github.com/rsdoiel/cmarkfind/index"
 	"github.com/rsdoiel/cmarkfind/remote"
 	"github.com/rsdoiel/markdownweb/fetch"
 )
@@ -58,5 +62,62 @@ func (o *out) indexDiscover(ctx context.Context, dbFile string, args []string) e
 		return nil
 	}
 	fmt.Fprintf(o.stdout, "manifest %s\nfound by %s\ngeneration %d\npages %d\nbuilt %s\n", f.Manifest, f.Via, f.Generation, f.Pages, f.Built)
+	return nil
+}
+
+/** indexAdd is `indexer add [-reference] SITE`: it makes a mirror (the published
+ * index fetched, verified and stored) or, with -reference, a reference (the
+ * manifest stored, the rest fetched at each search) of the index a site
+ * publishes. The set is named by the site's outline address, as a fill of the
+ * same site would name it, or by the manifest's address when given one.
+ */
+func (o *out) indexAdd(ctx context.Context, dbFile string, args []string) error {
+	fset, j := flags("indexer add", o)
+	reference := fset.Bool("reference", false, "")
+	if err := parse(fset, args, o, j); err != nil {
+		return err
+	}
+	if fset.NArg() != 1 {
+		return fmt.Errorf("%w: indexer add takes one site or manifest address", ErrUsage)
+	}
+	addr := fset.Arg(0)
+	if !httpAddress(addr) {
+		return fmt.Errorf("%w: %q is not an http or https address", ErrUsage, addr)
+	}
+	found, err := remote.Discover(ctx, fetchOptions(), addr)
+	if errors.Is(err, remote.ErrNoIndex) { // a negative answer to discover; add had something to make
+		return fmt.Errorf("%w: %v", index.ErrMissing, err)
+	}
+	if err != nil {
+		return err
+	}
+	name := found.Manifest
+	if found.SiteRoot != "" {
+		name = found.SiteRoot + ".well-known/toc.opml"
+	}
+	if err := os.MkdirAll(filepath.Dir(dbFile), 0o755); err != nil {
+		return fmt.Errorf("%w: %w", ErrCantCreate, err)
+	}
+	db, err := corpus.Open(dbFile)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	db.SetFetchOptions(fetchOptions())
+	source := "mirror"
+	if *reference {
+		source = "reference"
+	}
+	rs, err := db.AddRemoteSet(ctx, name, source, found.Manifest)
+	o.indexWarnings(db)
+	if err != nil {
+		return err
+	}
+	if o.json {
+		b, _ := json.Marshal(map[string]any{"name": rs.Name, "source": rs.Source, "manifest": rs.Manifest, "generation": rs.Generation, "files": rs.Files, "pages": found.Pages})
+		fmt.Fprintf(o.stdout, "%s\n", b)
+		return nil
+	}
+	fmt.Fprintf(o.stdout, "added %s %s\ngeneration %d\npages %d\n", rs.Source, rs.Name, rs.Generation, found.Pages)
 	return nil
 }

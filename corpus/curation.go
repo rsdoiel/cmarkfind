@@ -36,6 +36,12 @@ type Exclusion struct {
  *   n, err := db.Forget(ctx, "https://example.org/.well-known/toc.opml")
  */
 func (d *DB) Forget(ctx context.Context, site string) (int, error) {
+	if src, err := d.SetSource(ctx, site); err != nil {
+		return 0, err
+	} else if src != "" && src != "local" { // a mirror or reference holds no pages: it goes with its folder, and says how many pages it held
+		n, _ := d.publishedPages(ctx, []string{site})
+		return n, d.dropSets(ctx, []string{site})
+	}
 	n, err := d.forget(ctx, site)
 	if err == nil {
 		err = d.dropSets(ctx, []string{site})

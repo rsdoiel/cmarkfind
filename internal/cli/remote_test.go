@@ -90,7 +90,11 @@ func newDB(t *testing.T) string {
 func sourceOf(t *testing.T, db, name string) string {
 	t.Helper()
 	r := do(t, "-db", db, "set", "list", "-json")
-	for _, s := range parseJSON(t, r.out)["sets"].([]any) {
+	if r.code != 0 { // no corpus, so no set
+		return ""
+	}
+	sets, _ := parseJSON(t, r.out)["sets"].([]any)
+	for _, s := range sets {
 		m := s.(map[string]any)
 		if m["name"] == name {
 			return m["source"].(string)

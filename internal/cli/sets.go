@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -195,6 +196,9 @@ func (o *out) setFields(ctx context.Context, dbFile string, args []string) error
 		err = db.SetFields(ctx, site, 0, "")
 	case fset.NArg() > 1:
 		err = db.AssignFields(ctx, site, fset.Args()[1:])
+	}
+	if errors.Is(err, corpus.ErrRemoteSet) {
+		return fmt.Errorf("%w: %v; its field mapping is the publisher's", ErrUsage, err)
 	}
 	if err != nil {
 		return err

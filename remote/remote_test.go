@@ -554,3 +554,100 @@ func equal(a, b map[string]string) bool {
 	}
 	return true
 }
+
+// ---- the reference -----------------------------------------------------------
+
+// A reference keeps only its manifest (verified when stored); every other file is
+// fetched, and verified against the manifest's digests, each time it is read.
+func TestAReferenceReadsItsStoredManifestFromDiskAndFetchesTheRest(t *testing.T) {
+	s := serve(t, buildIndex(t, 2))
+	dir := filepath.Join(t.TempDir(), "ref")
+	rep, err := remote.StoreManifest(context.Background(), fetcher(), s.manifest(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Generation != 2 {
+		t.Errorf("report %+v", rep)
+	}
+	if got := listing(t, dir); len(got) != 1 || got["manifest.json"] == "" {
+		t.Fatalf("a reference keeps the manifest only, kept %d files", len(got))
+	}
+	n := len(s.requests())
+	src, err := remote.NewReference(context.Background(), fetcher(), s.manifest(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix, err := index.OpenSource(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.requests()[n:]; len(got) != 0 {
+		t.Errorf("opening a reference asked the server for %v; the manifest is on disk", got)
+	}
+	if hits := search(t, ix, "tomatoes"); len(hits) != 2 {
+		t.Errorf("%d hits, want 2", len(hits))
+	}
+	if len(s.requests()) == n {
+		t.Error("a search fetched no file")
+	}
+}
+
+func TestAReferenceRefusesAShardThatIsNotWhatTheStoredManifestSays(t *testing.T) {
+	d := buildIndex(t, 1)
+	shard := firstShard(t, d)
+	s := serve(t, d)
+	dir := filepath.Join(t.TempDir(), "ref")
+	if _, err := remote.StoreManifest(context.Background(), fetcher(), s.manifest(), dir); err != nil {
+		t.Fatal(err)
+	}
+	s.over = func(w http.ResponseWriter, r *http.Request, rel string) bool {
+		if rel == shard {
+			w.Write([]byte("swapped"))
+			return true
+		}
+		return false
+	}
+	src, _ := remote.NewReference(context.Background(), fetcher(), s.manifest(), dir)
+	if err := index.VerifySource(src); !index.IsDataError(err) {
+		t.Fatalf("err %v, want a data error", err)
+	}
+}
+
+func TestStoringAManifestFollowsTheGenerationRulesAndKeepsTheOldOneOnFailure(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "ref")
+	s := serve(t, buildIndex(t, 5))
+	if _, err := remote.StoreManifest(context.Background(), fetcher(), s.manifest(), dir); err != nil {
+		t.Fatal(err)
+	}
+	held := listing(t, dir)
+	// equal: nothing changes
+	rep, err := remote.StoreManifest(context.Background(), fetcher(), s.manifest(), dir)
+	if err != nil || rep.Changed || rep.Generation != 5 {
+		t.Fatalf("equal: %+v %v", rep, err)
+	}
+	// lower: a rollback, the stored manifest kept
+	stale := serve(t, buildIndex(t, 4))
+	if _, err := remote.StoreManifest(context.Background(), fetcher(), stale.manifest(), dir); !errors.Is(err, remote.ErrRollback) {
+		t.Fatalf("lower: %v", err)
+	}
+	if !equal(held, listing(t, dir)) {
+		t.Error("a rollback changed the stored manifest")
+	}
+	// higher: replaced
+	newer := serve(t, buildIndex(t, 6))
+	rep, err = remote.StoreManifest(context.Background(), fetcher(), newer.manifest(), dir)
+	if err != nil || !rep.Changed || rep.Generation != 6 {
+		t.Fatalf("higher: %+v %v", rep, err)
+	}
+	// a manifest that does not verify is not stored
+	bad := buildIndex(t, 9)
+	rewriteManifest(t, bad, func(m map[string]any) { m["required"] = []any{"future-feature/9"} })
+	before := listing(t, dir)
+	// (generation 9 is above the 6 held, so only the manifest's own checks can refuse it)
+	if _, err := remote.StoreManifest(context.Background(), fetcher(), serve(t, bad).manifest(), dir); !index.IsDataError(err) || errors.Is(err, remote.ErrRollback) {
+		t.Fatalf("bad manifest: %v, want a data error that is not a rollback", err)
+	}
+	if !equal(before, listing(t, dir)) {
+		t.Error("a manifest that failed verification was stored")
+	}
+}
