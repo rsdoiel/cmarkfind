@@ -172,10 +172,23 @@ func TestTheFormatComesFromTheSuffixThenTheAcceptHeaderAndMarkdownIsTheDefault(t
 		{"/search?q=tomatoes", "image/png, text/html", "text/html; charset=utf-8", 200},
 		{"/search?q=tomatoes", "image/png", "", 406},
 		{"/search?q=tomatoes", "text/plain", "", 406},
-		{"/search.md?q=tomatoes", "application/json", "text/markdown; charset=utf-8", 200},
-		{"/search.html?q=tomatoes", "application/json", "text/html; charset=utf-8", 200},
-		{"/search.json?q=tomatoes", "text/html", "application/json", 200},
-		{"/search.json?q=tomatoes", "image/png", "application/json", 200},
+		// the suffix picks the format unless the client's Accept rules it out; then the
+		// best format the client does accept is served (BonBon asks for text/markdown only)
+		{"/search.md?q=tomatoes", "application/json", "application/json", 200},
+		{"/search.html?q=tomatoes", "application/json", "application/json", 200},
+		{"/search.json?q=tomatoes", "text/html", "text/html; charset=utf-8", 200},
+		{"/search.json?q=tomatoes", "image/png", "", 406},
+		{"/search.html?q=tomatoes", "text/markdown, text/x-opml", "text/markdown; charset=utf-8", 200},
+		{"/search.json?q=tomatoes", "text/markdown, text/x-opml", "text/markdown; charset=utf-8", 200},
+		{"/index.html", "text/markdown, text/x-opml", "text/markdown; charset=utf-8", 200},
+		{"/version.html", "text/markdown, text/x-opml", "text/markdown; charset=utf-8", 200},
+		{"/search.html?q=tomatoes", "text/markdown, text/x-opml, */*", "text/html; charset=utf-8", 200},
+		{"/search.html?q=tomatoes", "text/*", "text/html; charset=utf-8", 200},
+		{"/search.html?q=tomatoes", "text/markdown, text/html;q=0", "text/markdown; charset=utf-8", 200},
+		{"/search.json?q=tomatoes", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "application/json", 200},
+		{"/search.md?q=tomatoes", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "text/markdown; charset=utf-8", 200},
+		{"/search.html?q=tomatoes", "", "text/html; charset=utf-8", 200},
+		{"/search.html?q=tomatoes", "garbage", "text/html; charset=utf-8", 200},
 	} {
 		r := e.get(c.path, "Accept", c.accept)
 		if r.status != c.status {

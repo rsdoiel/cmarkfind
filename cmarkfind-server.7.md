@@ -35,10 +35,14 @@ on standard error when it starts; run cmarkfind indexer build.
 
 The addresses: / is a small search page; /search is the search; /opensearch.xml
 describes the search for a browser, which can build a search box from it. The
+The
 search, and the pages below, come in three formats: Markdown (the default), HTML
 (a .html suffix, or Accept: text/html) and JSON (.json, or Accept:
-application/json); a suffix wins over Accept. The page /search.html has a form
-and a link a browser reads to find the description.
+application/json). A suffix picks the format unless the client's Accept does not
+accept it at all: a client that asks only for text/markdown, as BonBon does,
+gets Markdown at /search.html, and a browser, whose Accept includes */*, gets
+the HTML. The page /search.html has a form and a link a browser reads to find
+the description.
 
 /search takes q (the query, as cmarkfind-query(7) describes, at most 1,024
 bytes), set (one set, by a name set list shows, else every set not ignored),

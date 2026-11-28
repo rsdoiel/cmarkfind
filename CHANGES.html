@@ -265,7 +265,9 @@ as a mirror or reference.</li>
 <li><strong><code>server</code></strong>: a search service for this
 machine only (127.0.0.1, port 8900 unless set). <code>/search</code>
 answers as Markdown, HTML (<code>.html</code>) or JSON
-(<code>.json</code>, or by <code>Accept</code>) with <code>q</code>,
+(<code>.json</code>, or by <code>Accept</code>; a suffix gives way when
+the client’s <code>Accept</code> rules its format out, so a client that
+asks only for Markdown never gets HTML) with <code>q</code>,
 <code>set</code>, <code>count</code> and <code>startIndex</code>, and
 says how many hits matched in all, where the page starts and how many it
 holds, with links to the pages before and after.
