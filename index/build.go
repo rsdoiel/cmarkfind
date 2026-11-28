@@ -3,6 +3,7 @@ package index
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,6 +46,9 @@ type Doc struct {
  *   FileLimit (int)     — largest file the build writes; 0 or more than the format's
  *                         8 MiB means 8 MiB (smaller values are for tests)
  *
+ * A word on more than a million pages fails the build (ErrTooLarge, naming the
+ * word and its page count): a reader refuses a longer posting list.
+ *
  * Example:
  *   opt := index.BuildOptions{Generation: 3}
  */
@@ -54,7 +58,14 @@ type BuildOptions struct {
 	Built        time.Time
 	EntryBytes   int
 	FileLimit    int
+	postingCap   int // pages one word may be on; 0 means defaultPostingCap (tests lower it)
 }
+
+// defaultPostingCap is the most pages one word may be on: a word's posting list
+// is one CBOR array and the reader refuses an array of more than maxFiles
+// elements. The build refuses first, naming the word, so that it does not write
+// an index every search would call damaged.
+const defaultPostingCap = maxFiles
 
 /** DocumentOnlyWord is a word written without positions.
  *
@@ -71,6 +82,23 @@ type DocumentOnlyWord struct {
 	Pages, Positions int
 }
 
+/** SkippedPage is a page the build left out of the index because its text
+ * does not fit one fragment file.
+ *
+ * Fields:
+ *   Address (string) — the page
+ *   Bytes (int64)    — the size its fragment would have had, uncompressed
+ *   Limit (int)      — the file limit it went over
+ *
+ * Example:
+ *   s := index.SkippedPage{Address: "https://example.org/novel.md", Bytes: 8800115, Limit: 8388608}
+ */
+type SkippedPage struct {
+	Address string
+	Bytes   int64
+	Limit   int
+}
+
 /** BuildReport says what a build did that the person should know about.
  *
  * Fields:
@@ -78,7 +106,9 @@ type DocumentOnlyWord struct {
  *   LongTokens (int)                  — words over MaxTermBytes left out of the index
  *   LargestEntryBytes (int)           — encoded size of the biggest entry written
  *   LargestEntryWord (string)         — that entry's word
- *   Warnings ([]string)               — files over half the file limit, one line each
+ *   Warnings ([]string)               — files over half the file limit and pages left
+ *                                       out of the index, one line each
+ *   Skipped ([]SkippedPage)           — pages whose text is over one fragment file's limit
  *
  * Example:
  *   rep, err := index.BuildWithReport(dir, docs, index.BuildOptions{})
@@ -89,6 +119,7 @@ type BuildReport struct {
 	LargestEntryBytes int
 	LargestEntryWord  string
 	Warnings          []string
+	Skipped           []SkippedPage
 }
 
 type occurrence struct {
@@ -167,6 +198,9 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 	if opt.ChunkEntries <= 0 {
 		opt.ChunkEntries = DefaultChunkEntries
 	}
+	if opt.postingCap <= 0 {
+		opt.postingCap = defaultPostingCap
+	}
 	if opt.Generation == 0 {
 		opt.Generation = 1
 	}
@@ -188,7 +222,8 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 	postings := map[string][]rawPosting{}
 	var rows []documentRow
 	var totalWords uint64
-	for n, d := range docs {
+	for _, d := range docs {
+		longBefore := rep.LongTokens
 		parts := []struct {
 			text   string
 			weight int
@@ -227,9 +262,6 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 				surfaces = append(surfaces, w.Surface)
 			}
 		}
-		for term, os := range occ {
-			postings[term] = append(postings[term], rawPosting{doc: n, locs: encodeLocations(os)})
-		}
 		fields := map[string]any{}
 		if d.Title != "" {
 			fields["title"] = d.Title
@@ -243,8 +275,21 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 		}
 		frag.Anchors = anchors
 		ref, err := encodeFileLimit(dir, "f", compression, frag, opt.FileLimit)
+		if errors.Is(err, ErrTooLarge) {
+			// One page too big for a fragment file is left out, not fatal: it
+			// would otherwise stop every search of the corpus. A word chunk or
+			// a document table over the limit still fails the build below.
+			rep.LongTokens = longBefore
+			rep.Skipped = append(rep.Skipped, SkippedPage{Address: d.Address, Bytes: ref.Size, Limit: opt.FileLimit})
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("the page %s is not in the index: its text is %d bytes, over the %d byte limit of one index file", d.Address, ref.Size, opt.FileLimit))
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("the page %s: %w", d.Address, err)
+		}
+		doc := len(rows) // pages left out do not take a number
+		for term, os := range occ {
+			postings[term] = append(postings[term], rawPosting{doc: doc, locs: encodeLocations(os)})
 		}
 		note("fragment", ref.Size, "the text of "+d.Address)
 		digest, _ := hexDecode(ref.Digest)
@@ -254,7 +299,7 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 
 	m := manifest{Format: Format, Analyzer: Analyzer, Generation: opt.Generation,
 		Built: opt.Built.UTC().Format(time.RFC3339), Compression: compression,
-		Documents: documentsRec{Count: uint64(len(docs)), Words: totalWords}, Chunks: []chunkRef{}}
+		Documents: documentsRec{Count: uint64(len(rows)), Words: totalWords}, Chunks: []chunkRef{}}
 
 	for first := 0; first < len(rows); first += docsPerTable {
 		last := min(first+docsPerTable, len(rows))
@@ -295,6 +340,9 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 		return nil
 	}
 	for _, w := range words {
+		if n := len(postings[w]); n > opt.postingCap {
+			return fmt.Errorf("the word %q is on %d pages, over the %d pages one word may be on: %w", w, n, opt.postingCap, ErrTooLarge)
+		}
 		var ps []posting
 		prev, entryCount, positions := 0, 0, 0
 		for _, rp := range postings[w] {

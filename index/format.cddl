@@ -35,7 +35,8 @@
 ; LIMITS. Readers cap: manifest 4 MiB, one decompressed file "max-file-size",
 ; array and map sizes in a file at its entry count, nesting depth 8, and the
 ; number of files a manifest names ("max-files"). The numbers below are the
-; defaults of version 1.
+; defaults of version 1. A word's postings are one array, so a word on more than
+; max-files pages cannot be read; the writer refuses to write one.
 
 max-file-size = 8388608      ; 8 MiB decompressed
 max-files = 1000000

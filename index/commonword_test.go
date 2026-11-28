@@ -53,7 +53,17 @@ func TestAFailedBuildLeavesTheExistingIndexInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = BuildWithReport(dir, fixture(), BuildOptions{Generation: 2, Built: fixedTime, FileLimit: 64})
+	// a limit the fragments fit and the one-word chunks of limitDocs do not
+	docs := limitDocs()
+	probe := t.TempDir()
+	if err := Build(probe, docs, BuildOptions{ChunkEntries: 1, Generation: 1, Built: fixedTime, EntryBytes: 1 << 30}); err != nil {
+		t.Fatal(err)
+	}
+	biggest := int64(0)
+	for _, c := range manifestOf(t, probe).Chunks {
+		biggest = max(biggest, c.File.Size)
+	}
+	_, err = BuildWithReport(dir, docs, BuildOptions{ChunkEntries: 1, Generation: 2, Built: fixedTime, EntryBytes: 1 << 30, FileLimit: int(biggest) - 1})
 	if err == nil {
 		t.Fatal("a build over the file limit succeeded")
 	}

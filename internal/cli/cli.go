@@ -485,18 +485,25 @@ func (o *out) stats(ctx context.Context, dbFile string, args []string) error {
 	if docOnly == nil {
 		docOnly = []string{}
 	}
+	notIndexed := st.NotIndexed
+	if notIndexed == nil {
+		notIndexed = []string{}
+	}
 	if o.json {
 		sites := make([]map[string]any, 0, len(st.Sites))
 		for _, s := range st.Sites {
 			sites = append(sites, map[string]any{"site": s.Site, "tier": s.Tier, "pages": s.Pages, "gone": s.Gone, "listed": s.Listed, "pending": s.Pending})
 		}
-		b, _ := json.Marshal(map[string]any{"path": dbFile, "schema_version": st.SchemaVersion, "bytes": size, "pages": st.Pages, "gone": st.Gone, "excluded": st.Excluded, "pinned": st.Pinned, "tags": st.Tags, "tag_pages": st.TagPages, "pending": st.Pending, "sites": sites, "document_only": docOnly})
+		b, _ := json.Marshal(map[string]any{"path": dbFile, "schema_version": st.SchemaVersion, "bytes": size, "pages": st.Pages, "gone": st.Gone, "excluded": st.Excluded, "pinned": st.Pinned, "tags": st.Tags, "tag_pages": st.TagPages, "pending": st.Pending, "sites": sites, "document_only": docOnly, "not_indexed": notIndexed})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 		return nil
 	}
 	fmt.Fprintf(o.stdout, "path %s\nschema %d\nsize %d bytes\npages %d\ngone %d\nexcluded %d\npinned %d\ntags %d (%d on pages)\npending %d\n", dbFile, st.SchemaVersion, size, st.Pages, st.Gone, st.Excluded, st.Pinned, st.Tags, st.TagPages, st.Pending)
 	if len(st.DocumentOnly) > 0 {
 		fmt.Fprintf(o.stdout, "document-only %d  %s\n", len(st.DocumentOnly), strings.Join(st.DocumentOnly, " "))
+	}
+	if len(st.NotIndexed) > 0 {
+		fmt.Fprintf(o.stdout, "not indexed %d  %s\n", len(st.NotIndexed), strings.Join(st.NotIndexed, " "))
 	}
 	for _, s := range st.Sites {
 		more := ""

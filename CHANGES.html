@@ -44,6 +44,9 @@ completion share.</li>
 <code>completion -install</code>; <code>completion -uninstall</code> and
 <code>-check</code> exit 1 when there is nothing to remove or a
 problem.</li>
+<li>A word on more than a million pages stops the index build (exit 73,
+naming the word and its page count) instead of writing an index no
+search could read; the index already in place is kept.</li>
 <li>Pin and tag: <code>pin</code> and <code>unpin</code> mark a page by
 its address so a pinned match is listed first; <code>tag</code> and
 <code>untag</code> give a page your own tags (letters, digits,
@@ -129,9 +132,10 @@ normal forms. Snippets show Chinese and Japanese without spaces between
 characters and a longer window. Korean words are found as written
 (<code>한국어*</code> for a word with a particle); Thai, Lao, Khmer and
 Burmese are not segmented. A page of about two million CJK characters or
-more is too big for one fragment file and fails the build with its
-address. The index words changed again, so an index is rebuilt once on
-first use.</li>
+more is too big for one index file: it is left out of the index with a
+warning that names it (<code>stats</code> lists it under “not indexed”),
+and the corpus stays searchable. The index words changed again, so an
+index is rebuilt once on first use.</li>
 <li>A phrase of very common words (four of the commonest Chinese
 characters in a row, or <code>of the</code>) is about ten times faster
 on a long page: the places of the word with the fewest are tried and

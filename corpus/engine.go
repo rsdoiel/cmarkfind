@@ -29,6 +29,7 @@ var ErrIndexShared = errors.New("corpus: the index folder belongs to another cor
 const (
 	metaIndexGeneration = "index_generation"
 	metaDocumentOnly    = "document_only_digest"
+	metaNotIndexed      = "index_not_indexed"
 	metaCorpusID        = "corpus_id"
 	ownerFile           = ".cmarkfind-owner"
 )
@@ -190,6 +191,9 @@ func (d *DB) BuildIndex(ctx context.Context, dir string, chunk int) (*index.Inde
 		if err := d.noteDocumentOnly(ctx, rep, ix.DocumentOnly()); err != nil {
 			return nil, err
 		}
+		if err := d.noteNotIndexed(ctx, rep); err != nil {
+			return nil, err
+		}
 	}
 	return ix, nil
 }
@@ -229,6 +233,20 @@ func (d *DB) noteDocumentOnly(ctx context.Context, rep *index.BuildReport, words
 		}
 	}
 	return nil
+}
+
+// noteNotIndexed records which pages the last build of the corpus's own index
+// left out (a page whose text is over one index file's limit), for Stats. An
+// empty list is stored as an empty value so a rebuild that fixes it clears it.
+func (d *DB) noteNotIndexed(ctx context.Context, rep *index.BuildReport) error {
+	var addrs []string
+	for _, s := range rep.Skipped {
+		addrs = append(addrs, s.Address)
+	}
+	sort.Strings(addrs)
+	_, err := d.sql.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		metaNotIndexed, strings.Join(addrs, "\n"))
+	return classify(err)
 }
 
 func pluralWords(n int) string {

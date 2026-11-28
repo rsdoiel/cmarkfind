@@ -39,6 +39,10 @@ type SiteStat struct {
  *   TagPages (int)      — tag and page pairs
  *   Pending (int)       — pages the sites list that are not fetched yet
  *   Sites ([]SiteStat)  — counts by site and tier, ordered by site then tier
+ *   DocumentOnly ([]string) — very common words the index holds without positions
+ *   NotIndexed ([]string)   — addresses the last index build left out because a
+ *                             page's text is over one index file's limit; they are
+ *                             stored and not searchable
  *
  * Example:
  *   fmt.Printf("%d pages, %d gone\n", st.Pages, st.Gone)
@@ -53,6 +57,7 @@ type Stats struct {
 	Pending       int
 	Sites         []SiteStat
 	DocumentOnly  []string // words the index holds without positions
+	NotIndexed    []string // pages the last index build left out: too big for an index file
 }
 
 /** Stats counts what the corpus holds.
@@ -71,6 +76,13 @@ func (d *DB) Stats(ctx context.Context) (*Stats, error) {
 	st := &Stats{SchemaVersion: SchemaVersion}
 	if ix, err := index.Open(d.IndexDir()); err == nil {
 		st.DocumentOnly = ix.DocumentOnly()
+	}
+	var skipped string
+	if err := d.sql.QueryRowContext(ctx, `SELECT coalesce((SELECT value FROM meta WHERE key = ?), '')`, metaNotIndexed).Scan(&skipped); err != nil {
+		return nil, classify(err)
+	}
+	if skipped != "" {
+		st.NotIndexed = strings.Split(skipped, "\n")
 	}
 	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM excluded`).Scan(&st.Excluded); err != nil {
 		return nil, classify(err)

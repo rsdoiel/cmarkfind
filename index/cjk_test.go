@@ -259,16 +259,20 @@ func TestCJKCharactersOnEveryPageAreDocumentOnlyAndPhrasesStayExact(t *testing.T
 }
 
 // A fragment holds a CJK character and a space (four bytes), so a page of about
-// two million characters does not fit the 8 MiB file limit: the build fails and
-// names the page; a million characters gives the half-limit warning.
+// two million characters does not fit the 8 MiB file limit: the page is left out
+// of the index and named in the report, and the build succeeds; a million
+// characters gives the half-limit warning.
 func TestAHugeCJKPageNamesItselfWhenItDoesNotFit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds a 9 MB fragment")
 	}
 	dir := t.TempDir()
-	_, err := BuildWithReport(dir, []Doc{{Address: "https://example.org/novel.md", Body: strings.Repeat("猫", 2_200_000)}}, BuildOptions{Generation: 1, Built: fixedTime})
-	if err == nil || !strings.Contains(err.Error(), "https://example.org/novel.md") {
-		t.Fatalf("error %v", err)
+	rep0, err := BuildWithReport(dir, []Doc{{Address: "https://example.org/novel.md", Body: strings.Repeat("猫", 2_200_000)}}, BuildOptions{Generation: 1, Built: fixedTime})
+	if err != nil {
+		t.Fatalf("a page too big for a fragment stopped the build: %v", err)
+	}
+	if len(rep0.Skipped) != 1 || rep0.Skipped[0].Address != "https://example.org/novel.md" || rep0.Skipped[0].Limit != maxFileSize {
+		t.Fatalf("skipped %+v", rep0.Skipped)
 	}
 	rep, err := BuildWithReport(t.TempDir(), []Doc{{Address: "https://example.org/long.md", Body: strings.Repeat("猫", 1_200_000)}}, BuildOptions{Generation: 1, Built: fixedTime})
 	if err != nil || len(rep.Warnings) == 0 {

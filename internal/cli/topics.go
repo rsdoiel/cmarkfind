@@ -194,6 +194,17 @@ words has changed. A word of more than 128 bytes (a hash, a pasted blob) is not
 indexed at all. A build that still cannot fit a file names the word and exits
 73; the index already in place is left as it was and keeps answering searches.
 
+A word that is on more than a million pages is more than a reader will take (a
+posting list is one array, and a reader refuses one of over a million elements),
+so the build stops, names the word and its page count, and exits 73 instead of
+writing an index every search would call damaged; the index already in place is
+kept. A corpus of that size is far beyond what a rebuild after every fill suits.
+
+A page whose own text is over one index file (about two million Chinese or
+Japanese characters in a page) cannot be written. The build leaves that page out,
+warns on standard error with its address, and goes on; the page stays in the
+corpus and is not searchable. stats lists such pages as "not indexed".
+
 DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
 named index beside the corpus file (so -db moves both). The corpus builds its own index in that folder after every fill, forget or
 exclude that changed pages, and plain search reads it; a search finding it
@@ -239,7 +250,11 @@ cmarkfind stats [OPTIONS]
 Say what the corpus holds: pages, pages gone, counts by site and tier, how many
 listed pages have not been fetched yet, the file's size and its schema version,
 and, when there are any, the very common words the index holds without
-positions (see cmarkfind-indexer(7)); JSON has them as "document_only".
+positions (see cmarkfind-indexer(7)); JSON has them as "document_only". A page
+whose text is too big for one index file (about two million Chinese or Japanese
+characters) is stored but left out of the index: a "not indexed" line names it
+(JSON: "not_indexed", a list, empty when nothing is missing) until the page is
+excluded, forgotten or replaced by a smaller one.
 
 # OPTIONS
 

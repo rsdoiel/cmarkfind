@@ -20,7 +20,11 @@ cmarkfind stats [OPTIONS]
 Say what the corpus holds: pages, pages gone, counts by site and tier, how many
 listed pages have not been fetched yet, the file's size and its schema version,
 and, when there are any, the very common words the index holds without
-positions (see cmarkfind-indexer(7)); JSON has them as "document_only".
+positions (see cmarkfind-indexer(7)); JSON has them as "document_only". A page
+whose text is too big for one index file (about two million Chinese or Japanese
+characters) is stored but left out of the index: a "not indexed" line names it
+(JSON: "not_indexed", a list, empty when nothing is missing) until the page is
+excluded, forgotten or replaced by a smaller one.
 
 # OPTIONS
 
