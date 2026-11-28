@@ -53,6 +53,10 @@ var (
 	// ErrData marks content that is wrong: a bad digest, a malformed file, an
 	// unknown format. Commands exit 65 on it.
 	ErrData = errors.New("index data is wrong")
+	// ErrAnalyzer marks an index built with an analyzer (a word-splitting rule)
+	// this reader does not implement. It is also a data error (65): such an
+	// index cannot be searched here, though it may be sound.
+	ErrAnalyzer = errors.New("index analyzer is not supported")
 	// ErrMissing marks an index (or a file it needs) that cannot be found.
 	// Commands exit 66 on it.
 	ErrMissing = errors.New("index not found")
@@ -87,6 +91,26 @@ func IsDataError(err error) bool { return errors.Is(err, ErrData) }
  *   if index.IsMissing(err) { os.Exit(66) }
  */
 func IsMissing(err error) bool { return errors.Is(err, ErrMissing) }
+
+/** IsAnalyzerError reports whether err is (or wraps) an unsupported-analyzer
+ * error: the index was built with a word-splitting rule this reader lacks.
+ *
+ * Parameters:
+ *   err (error) — any error
+ *
+ * Returns:
+ *   bool — true for ErrAnalyzer
+ *
+ * Example:
+ *   if index.IsAnalyzerError(err) { skipThisSet() }
+ */
+func IsAnalyzerError(err error) bool { return errors.Is(err, ErrAnalyzer) }
+
+// errAnalyzer is the error for an index built with analyzer name: a data error,
+// and an analyzer error.
+func errAnalyzer(name string) error {
+	return fmt.Errorf("%w: analyzer %q is not supported (this reader knows %s): %w", ErrData, name, Analyzer, ErrAnalyzer)
+}
 
 func dataf(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrData, fmt.Sprintf(format, args...))

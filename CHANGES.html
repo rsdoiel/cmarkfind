@@ -187,8 +187,12 @@ the same name is refused until <code>forget</code>. A program opens a
 page with <code>corpus.CollectionFile</code>, which refuses
 <code>..</code>, encoded <code>..</code> and symbolic links out of the
 folder. <code>set show</code> names a collection’s folder.</li>
+<li>A set whose index is kept in a word rule this program does not read
+(an index fetched from elsewhere, from a later version) is left out of
+<code>search</code> with one warning, never mixed with the others;
+<code>search-set</code> on it exits 65. A set built here is simply
+rebuilt. ## v0.0.1, 2026-11-26</li>
 </ul>
-<h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>
 <ul>
 <li>The corpus: Markdown pages in one SQLite3 file, searched with FTS5

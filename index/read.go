@@ -162,7 +162,7 @@ func openSource(src Source, where string) (*Index, error) {
 		return nil, dataf("format %q is not supported (this reader knows %s)", m.Format, Format)
 	}
 	if m.Analyzer != Analyzer {
-		return nil, dataf("analyzer %q is not supported (this reader knows %s)", m.Analyzer, Analyzer)
+		return nil, errAnalyzer(m.Analyzer)
 	}
 	var lacking []string
 	hasDocOnly := false

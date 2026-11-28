@@ -636,3 +636,28 @@ func TestTheSetVerbsHaveHelpTopicsAndExitStatusText(t *testing.T) {
 		t.Errorf("exit-status: %+v", r)
 	}
 }
+
+// A set kept in an analyzer this program does not read is left out of the merge
+// with a warning and is exit 65 when searched alone.
+func TestASetInAnAnalyzerWeDoNotReadIsWarnedAboutAndSearchSetIsExit65(t *testing.T) {
+	db, a, _ := twoSets(t)
+	raw, err := openRaw(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw.Exec(`UPDATE sets SET source = 'mirror' WHERE site = ?`, a)
+	raw.Close()
+	mp := filepath.Join(setIndexDir(t, db, a), "manifest.json")
+	b, _ := os.ReadFile(mp)
+	os.WriteFile(mp, []byte(strings.Replace(string(b), `"unicode-word-v3"`, `"porter-stem-v1"`, 1)), 0o644)
+	r := do(t, "-db", db, "search", "-limit", "20", "otter")
+	if r.code != 0 || strings.Contains(r.out, "a.example") || !strings.Contains(r.out, addrB1) {
+		t.Fatalf("search: %+v", r)
+	}
+	if !strings.Contains(r.errOut, "left out") || !strings.Contains(r.errOut, "porter-stem-v1") {
+		t.Errorf("no warning: %q", r.errOut)
+	}
+	if r := do(t, "-db", db, "search-set", a, "otter"); r.code != 65 {
+		t.Errorf("search-set: %+v", r)
+	}
+}

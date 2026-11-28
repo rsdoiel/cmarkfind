@@ -29,7 +29,7 @@
 - There is no longer one index for the whole corpus: a fill or an exclusion rebuilds only the sets whose pages changed, and `indexer build [SET]`, `indexer validate [SET]` and `indexer list [SET]` take a set and not a folder. `search -index DIR` and `indexer build DIR` are gone (neither was released). The first build removes the old corpus-wide index files. A set's folder is a complete index that can be published as it is.
 - Schema version 6 (the `sets` and `collections` tables). An older cmarkbrowser exits 65 on a version 6 file; move it to this cmarkfind first. New help topics `set` and `search-set`.
 - Collections: `fill -name NAME FOLDER` reads a folder of Markdown files with no outline (`.md` and `.markdown`, any depth; dot files and folders, symbolic links and files over 8 MiB are left out) as the collection NAME, stored under `collection://NAME/relative/path.md`. A collection is an index set: `search-set NAME`, `set ignore NAME`, `exclude collection://NAME/drafts/`, `forget NAME`. The folder is remembered; another folder under the same name is refused until `forget`. A program opens a page with `corpus.CollectionFile`, which refuses `..`, encoded `..` and symbolic links out of the folder. `set show` names a collection's folder.
-
+- A set whose index is kept in a word rule this program does not read (an index fetched from elsewhere, from a later version) is left out of `search` with one warning, never mixed with the others; `search-set` on it exits 65. A set built here is simply rebuilt.
 ## v0.0.1, 2026-11-26
 
 First release: a personal search engine for the Markdown web.

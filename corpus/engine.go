@@ -273,8 +273,9 @@ const rrfK = 60
 // searched alone and its hits ranked by score (to two decimals), then tier, then
 // address; the lists are merged by reciprocal rank fusion, then pinned hits come
 // first, then the fused score, tier and address; cut at limit, with a bracketed
-// snippet each. The pinned and tag sets filter before ranking.
-func (d *DB) searchSets(ctx context.Context, sites []string, query, frag string, fargs []any, limit int) ([]Hit, error) {
+// snippet each. The pinned and tag sets filter before ranking. With aggregate,
+// a set whose analyzer this program does not read is left out with a warning.
+func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int) ([]Hit, error) {
 	node, err := index.ParseQuery(query, nil)
 	if err != nil {
 		return nil, err
@@ -297,6 +298,13 @@ func (d *DB) searchSets(ctx context.Context, sites []string, query, frag string,
 	meta := map[string]pageMeta{}
 	for _, site := range sites {
 		ix, err := d.currentSet(ctx, site)
+		if aggregate && index.IsAnalyzerError(err) {
+			// never mixed: a set in another word rule is left out, and said so
+			d.mu.Lock()
+			d.warnings = append(d.warnings, fmt.Sprintf("set %v; left out of the search (search-set reads it only when this program knows its analyzer)", err))
+			d.mu.Unlock()
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}

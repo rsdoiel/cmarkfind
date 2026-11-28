@@ -524,17 +524,24 @@ func (d *DB) currentSet(ctx context.Context, site string) (*index.Index, error) 
 		return nil, err
 	}
 	var gen int
-	err := d.sql.QueryRowContext(ctx, `SELECT generation FROM sets WHERE site = ?`, site).Scan(&gen)
+	var source string
+	err := d.sql.QueryRowContext(ctx, `SELECT generation, source FROM sets WHERE site = ?`, site).Scan(&gen, &source)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("%w: %s", ErrNoSet, site)
 	}
 	if err != nil {
 		return nil, classify(err)
 	}
-	if ix, oerr := index.Open(d.SetIndexDir(site)); oerr == nil && int(ix.Generation()) == gen && gen > 0 {
+	ix, oerr := index.Open(d.SetIndexDir(site))
+	if oerr == nil && int(ix.Generation()) == gen && gen > 0 {
 		return ix, nil
 	}
-	ix, _, err := d.buildSet(ctx, site, 0, true)
+	if index.IsAnalyzerError(oerr) && source != "local" {
+		// an index fetched from elsewhere in a word rule this program lacks is
+		// not ours to rebuild
+		return nil, fmt.Errorf("%s: %w", site, oerr)
+	}
+	ix, _, err = d.buildSet(ctx, site, 0, true)
 	return ix, err
 }
 

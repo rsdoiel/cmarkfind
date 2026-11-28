@@ -143,7 +143,7 @@ func (d *DB) SearchWith(ctx context.Context, query string, opts SearchOptions) (
 	var hits []Hit
 	switch {
 	case strings.TrimSpace(query) != "":
-		hits, err = d.searchSets(ctx, sites, query, frag, fargs, limit)
+		hits, err = d.searchSets(ctx, sites, opts.Set == "", query, frag, fargs, limit)
 	case filtered:
 		hits, err = d.run(ctx, fmt.Sprintf(listSQL, frag), append(append([]any{}, fargs...), limit))
 	default:
