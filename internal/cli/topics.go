@@ -432,6 +432,14 @@ css
 info
 : on or off: whether /version, /stats and /sets answer. Default on.
 
+title
+: The service's name, 1 to 16 characters of plain printable ASCII (no quote,
+  apostrophe, backslash, angle bracket or ampersand, and no space at either end).
+  Default cmarkfind. It is the name a browser offers in "Add NAME" for the search
+  box, and it is in the description, the title of the Link header and of the
+  HTML discovery link, and the heading of the search page. Give each cmarkfind
+  on a network a title of its own, a host or a project, so that the names differ.
+
 # OPTIONS
 
 -json
@@ -451,6 +459,7 @@ status. See cmarkfind-exit-status(7).
     cmarkfind server set results 50
     cmarkfind server set css https://example.org/site.css
     cmarkfind server set info off
+    cmarkfind server set title wren-notes
     cmarkfind server
     cmarkfind server port 0
 

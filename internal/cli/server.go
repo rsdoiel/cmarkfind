@@ -61,6 +61,8 @@ func settingText(name string, s server.Settings) string {
 		return strconv.Itoa(s.Results)
 	case "css":
 		return s.CSS
+	case "title":
+		return s.Title
 	}
 	if s.Info {
 		return "on"
@@ -78,6 +80,8 @@ func settingValue(name string, s server.Settings) any {
 		return s.Results
 	case "css":
 		return s.CSS
+	case "title":
+		return s.Title
 	}
 	return s.Info
 }

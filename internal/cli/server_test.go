@@ -113,14 +113,14 @@ func TestServerShowListsEveryFiveSettingsWithTheirDefaults(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("%+v", r)
 	}
-	for _, want := range []string{"port 8900 (default)", "results 100 (default)", "info on (default)", "css  (default)", "concurrency"} {
+	for _, want := range []string{"port 8900 (default)", "results 100 (default)", "info on (default)", "css  (default)", "concurrency", "title cmarkfind (default)"} {
 		if !strings.Contains(r.out, want) {
 			t.Errorf("show lacks %q:\n%s", want, r.out)
 		}
 	}
 	j := do(t, "-db", db, "server", "show", "-json")
 	m := parseJSON(t, j.out)["settings"].(map[string]any)
-	for _, name := range []string{"port", "concurrency", "results", "css", "info"} {
+	for _, name := range []string{"port", "concurrency", "results", "css", "info", "title"} {
 		s, ok := m[name].(map[string]any)
 		if !ok || s["stored"] != false {
 			t.Errorf("setting %s in JSON: %v", name, m[name])
@@ -133,13 +133,13 @@ func TestServerShowListsEveryFiveSettingsWithTheirDefaults(t *testing.T) {
 
 func TestServerSetStoresASettingAndShowReadsItBackAndDefaultRemovesIt(t *testing.T) {
 	db := filled(t)
-	for _, c := range [][2]string{{"port", "9123"}, {"concurrency", "5"}, {"results", "25"}, {"css", "https://x.example/a.css"}, {"info", "off"}} {
+	for _, c := range [][2]string{{"port", "9123"}, {"concurrency", "5"}, {"results", "25"}, {"css", "https://x.example/a.css"}, {"info", "off"}, {"title", "wren notes"}} {
 		if r := do(t, "-db", db, "server", "set", c[0], c[1]); r.code != 0 {
 			t.Fatalf("set %s %s: %+v", c[0], c[1], r)
 		}
 	}
 	show := do(t, "-db", db, "server", "show").out
-	for _, want := range []string{"port 9123 (stored)", "concurrency 5 (stored)", "results 25 (stored)", "css https://x.example/a.css (stored)", "info off (stored)"} {
+	for _, want := range []string{"port 9123 (stored)", "concurrency 5 (stored)", "results 25 (stored)", "css https://x.example/a.css (stored)", "info off (stored)", "title wren notes (stored)"} {
 		if !strings.Contains(show, want) {
 			t.Errorf("show lacks %q:\n%s", want, show)
 		}
@@ -172,6 +172,8 @@ func TestServerSetAndPortExitCodes(t *testing.T) {
 		"a bad results":         {[]string{"server", "set", "results", "5000"}, 2},
 		"a bad css":             {[]string{"server", "set", "css", "ftp://x/a.css"}, 2},
 		"a bad info":            {[]string{"server", "set", "info", "maybe"}, 2},
+		"a title too long":      {[]string{"server", "set", "title", "this title is far too long"}, 2},
+		"a title with a quote":  {[]string{"server", "set", "title", `say "hi"`}, 2},
 		"show with an argument": {[]string{"server", "show", "port"}, 2},
 		"an unknown subverb":    {[]string{"server", "start"}, 2},
 		"port with no number":   {[]string{"server", "port"}, 2},

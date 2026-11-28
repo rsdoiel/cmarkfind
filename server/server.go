@@ -33,6 +33,7 @@ var ErrBadSetting = errors.New("server: bad setting")
  *   Results (int)     — the most hits on a page, and the page size when none is asked for
  *   CSS (string)      — a stylesheet to link from the HTML pages; empty for none
  *   Info (bool)       — whether /version, /stats and /sets are answered
+ *   Title (string)    — the service's name, in the description and wherever it names itself; empty is "cmarkfind"
  */
 type Settings struct {
 	Port        int
@@ -40,10 +41,11 @@ type Settings struct {
 	Results     int
 	CSS         string
 	Info        bool
+	Title       string
 }
 
 // SettingNames is the settings, in the order show prints them.
-var SettingNames = []string{"port", "concurrency", "results", "css", "info"}
+var SettingNames = []string{"port", "concurrency", "results", "css", "info", "title"}
 
 /** Version is what /version says.
  *
@@ -66,9 +68,10 @@ type Server struct {
 	Stored            map[string]bool
 	Log               io.Writer
 
-	db  *corpus.DB
-	set Settings
-	ver Version
+	db   *corpus.DB
+	set  Settings
+	ver  Version
+	link string // the Link header of every response (item 6)
 
 	port    atomic.Int64
 	started time.Time
@@ -99,7 +102,11 @@ func New(db *corpus.DB, s Settings, v Version) *Server {
 	if s.Results < 1 {
 		s.Results = 100
 	}
-	return &Server{db: db, set: s, ver: v, started: time.Now(), sem: make(chan struct{}, s.Concurrency)}
+	if s.Title == "" {
+		s.Title = DefaultTitle
+	}
+	return &Server{db: db, set: s, ver: v, started: time.Now(), sem: make(chan struct{}, s.Concurrency),
+		link: `</opensearch.xml>; rel="search"; type="application/opensearchdescription+xml"; title="` + s.Title + `"`}
 }
 
 /** Listen binds 127.0.0.1 at port, and only that address.
@@ -220,16 +227,17 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 
-// descriptionLink names the OpenSearch description in a Link header, so a client
-// that asks for Markdown, which has no head to carry a <link>, still learns that
-// search is here and where its description is (DR-0018 item 6). The target is
-// relative: it is the description at the address the client already reached.
-const descriptionLink = `</opensearch.xml>; rel="search"; type="application/opensearchdescription+xml"; title="cmarkfind"`
+// DefaultTitle is the service's name when the title setting is not stored.
+const DefaultTitle = "cmarkfind"
 
-// setHeaders are on every response, errors included (item 9).
-func setHeaders(w http.ResponseWriter) {
+// setHeaders are on every response, errors included (item 9). The Link header
+// names the OpenSearch description, so a client that asks for Markdown, which has
+// no head to carry a <link>, still learns that search is here and where its
+// description is (item 6). The target is relative: it is the description at the
+// address the client already reached; its title is the title setting.
+func (s *Server) setHeaders(w http.ResponseWriter) {
 	h := w.Header()
-	h.Set("Link", descriptionLink)
+	h.Set("Link", s.link)
 	h.Set("Cache-Control", "no-store")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
@@ -253,7 +261,7 @@ func (s *Server) hostAllowed(host string) bool {
 
 // serve is the checks of items 9 and 10, then the routes.
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
-	setHeaders(w)
+	s.setHeaders(w)
 	if !s.hostAllowed(r.Host) {
 		fail(w, http.StatusForbidden, "forbidden: not a request for this address")
 		return

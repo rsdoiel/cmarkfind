@@ -34,7 +34,7 @@ func (s *Server) description(w http.ResponseWriter, r *http.Request) {
 	base := "http://" + r.Host
 	params := "?q={searchTerms}&count={count?}&startIndex={startIndex?}"
 	doc := osdDoc{
-		ShortName:   "cmarkfind",
+		ShortName:   s.set.Title,
 		Description: "Search the Markdown pages in this cmarkfind corpus",
 		Input:       "UTF-8",
 		Output:      "UTF-8",
@@ -130,6 +130,8 @@ func (s *Server) settingValue(name string) any {
 		return s.set.Results
 	case "css":
 		return s.set.CSS
+	case "title":
+		return s.set.Title
 	}
 	return s.set.Info
 }

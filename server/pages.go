@@ -89,7 +89,7 @@ func (s *Server) root(w http.ResponseWriter, r *http.Request, f format) {
 		return
 	}
 	var b strings.Builder
-	b.WriteString("# cmarkfind\n\nSearch the Markdown pages in this cmarkfind corpus.\n\n")
+	b.WriteString("# " + render.Text(s.set.Title) + "\n\nSearch the Markdown pages in this cmarkfind corpus.\n\n")
 	b.WriteString("- Search: `/search?q=QUERY`, for example [/search?q=example](/search?q=example). The page, `.html` and `.json` are the Markdown, HTML and JSON of one search; `set`, `count` and `startIndex` are the other parameters.\n")
 	b.WriteString("- The description for a browser's search box: [/opensearch.xml](/opensearch.xml)\n")
 	if s.set.Info {
@@ -116,15 +116,15 @@ type htmlFacet struct {
 }
 
 type htmlPage struct {
-	Title, CSS, Q, Set, Position, Prev, Next string
-	Info                                     bool
-	Root                                     bool
-	Start                                    int
-	Facets                                   []htmlFacet
-	Hits                                     []htmlHit
-	Rows                                     [][]string // a table, for /stats and /sets
-	Head                                     []string
-	Lines                                    []string // plain lines, for /version
+	Title, SiteTitle, CSS, Q, Set, Position, Prev, Next string
+	Info                                                bool
+	Root                                                bool
+	Start                                               int
+	Facets                                              []htmlFacet
+	Hits                                                []htmlHit
+	Rows                                                [][]string // a table, for /stats and /sets
+	Head                                                []string
+	Lines                                               []string // plain lines, for /version
 }
 
 var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
@@ -133,11 +133,11 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
-<link rel="search" type="application/opensearchdescription+xml" title="cmarkfind" href="/opensearch.xml">
+<link rel="search" type="application/opensearchdescription+xml" title="{{.SiteTitle}}" href="/opensearch.xml">
 {{if .CSS}}<link rel="stylesheet" href="{{.CSS}}">
 {{end}}</head>
 <body>
-<h1>cmarkfind</h1>
+<h1>{{.SiteTitle}}</h1>
 <form action="/search.html" method="get">
 <input type="search" name="q" value="{{.Q}}" aria-label="Search">
 {{if .Set}}<input type="hidden" name="set" value="{{.Set}}">
@@ -176,6 +176,7 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
 
 // writeHTML renders a page; a content security policy goes with it (item 9).
 func (s *Server) writeHTML(w http.ResponseWriter, p htmlPage) {
+	p.SiteTitle = s.set.Title
 	var b bytes.Buffer
 	if err := pageTemplate.Execute(&b, p); err != nil {
 		s.logf("internal error: %v", err)

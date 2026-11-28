@@ -29,7 +29,7 @@ var whole = regexp.MustCompile(`^[0-9]{1,9}$`)
  *   s := server.Defaults()
  */
 func Defaults() Settings {
-	return Settings{Port: 8900, Concurrency: max(2, runtime.NumCPU()), Results: 100, Info: true}
+	return Settings{Port: 8900, Concurrency: max(2, runtime.NumCPU()), Results: 100, Info: true, Title: DefaultTitle}
 }
 
 /** ReadSettings reads the settings from the corpus's meta table, with the
@@ -114,6 +114,8 @@ func apply(s *Settings, name, v string) {
 		s.CSS = v
 	case "info":
 		s.Info = v == "on"
+	case "title":
+		s.Title = v
 	}
 }
 
@@ -149,6 +151,8 @@ func checkSetting(name, v string) (string, error) {
 			return "", nil
 		}
 		return checkCSS(v)
+	case "title":
+		return checkTitle(v)
 	}
 	return bad("not a setting")
 }
@@ -190,4 +194,27 @@ func cssOrigin(css string) string {
 	}
 	u, _ := url.Parse(css)
 	return u.Scheme + "://" + u.Host
+}
+
+// checkTitle accepts 1 to 16 characters of printable ASCII, without a quote, an
+// apostrophe, a backslash, an angle bracket or an ampersand, and with no space at
+// either end. 16 is OpenSearch's limit for a ShortName; the rest keeps the name
+// the same in an XML attribute, an HTML page, a Markdown heading and the quoted
+// title of a Link header.
+func checkTitle(v string) (string, error) {
+	bad := func(why string) (string, error) {
+		return "", fmt.Errorf("%w: title: %q is %s", ErrBadSetting, v, why)
+	}
+	if v == "" || len(v) > 16 {
+		return bad("not from 1 to 16 characters")
+	}
+	if v != strings.TrimSpace(v) {
+		return bad("spaced at an end")
+	}
+	for _, r := range v {
+		if r < 0x20 || r > 0x7e || strings.ContainsRune("\"'\\<>&", r) {
+			return bad("not plain printable ASCII without \" ' \\ < > or &")
+		}
+	}
+	return v, nil
 }

@@ -44,7 +44,7 @@ func TestStatsReportsTheSettingsWhatWasStoredWhatTheServerHasDoneAndTheCorpusInN
 	for name, want := range map[string]struct {
 		value  any
 		stored bool
-	}{"results": {float64(50), true}, "concurrency": {float64(3), false}, "info": {true, false}, "css": {"", false}} {
+	}{"results": {float64(50), true}, "concurrency": {float64(3), false}, "info": {true, false}, "css": {"", false}, "title": {"cmarkfind", false}} {
 		got, ok := set[name].(map[string]any)
 		if !ok || got["value"] != want.value || got["stored"] != want.stored {
 			t.Errorf("setting %s: %v, want value %v stored %v", name, set[name], want.value, want.stored)
@@ -202,16 +202,16 @@ func TestSettingsReadAsDefaultsUntilStoredAndAreStoredByNameAndRemovedByDefault(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Port != 8900 || s.Concurrency < 2 || s.Results != 100 || s.CSS != "" || !s.Info || len(stored) != 0 {
+	if s.Port != 8900 || s.Concurrency < 2 || s.Results != 100 || s.CSS != "" || !s.Info || s.Title != "cmarkfind" || len(stored) != 0 {
 		t.Errorf("defaults: %+v stored %v", s, stored)
 	}
-	for name, value := range map[string]string{"port": "8123", "concurrency": "7", "results": "25", "css": "https://x.example/a.css", "info": "off"} {
+	for name, value := range map[string]string{"port": "8123", "concurrency": "7", "results": "25", "css": "https://x.example/a.css", "info": "off", "title": "wren notes"} {
 		if err := server.WriteSetting(ctx, db, name, value); err != nil {
 			t.Errorf("set %s %s: %v", name, value, err)
 		}
 	}
 	s, stored, _ = server.ReadSettings(ctx, db)
-	if s.Port != 8123 || s.Concurrency != 7 || s.Results != 25 || s.CSS != "https://x.example/a.css" || s.Info || len(stored) != 5 {
+	if s.Port != 8123 || s.Concurrency != 7 || s.Results != 25 || s.CSS != "https://x.example/a.css" || s.Info || s.Title != "wren notes" || len(stored) != 6 {
 		t.Errorf("stored: %+v %v", s, stored)
 	}
 	for _, name := range server.SettingNames {
@@ -219,7 +219,7 @@ func TestSettingsReadAsDefaultsUntilStoredAndAreStoredByNameAndRemovedByDefault(
 			t.Errorf("default %s: %v", name, err)
 		}
 	}
-	if s, stored, _ = server.ReadSettings(ctx, db); s.Port != 8900 || s.Results != 100 || !s.Info || len(stored) != 0 {
+	if s, stored, _ = server.ReadSettings(ctx, db); s.Port != 8900 || s.Results != 100 || !s.Info || s.Title != "cmarkfind" || len(stored) != 0 {
 		t.Errorf("after default: %+v %v", s, stored)
 	}
 	if err := server.WriteSetting(ctx, db, "port", "0"); err != nil { // a stored 0 is a free port at each run
@@ -244,6 +244,8 @@ func TestEveryBadSettingIsRefusedAndNothingBadIsStored(t *testing.T) {
 		{"css", "ftp://x.example/a.css"}, {"css", "//x.example/a.css"}, {"css", "style.css"}, {"css", "https://x.example/a b.css"},
 		{"css", "https://x.example/a.css\n"}, {"css", "javascript:alert(1)"}, {"css", "https://"}, {"css", "/" + strings.Repeat("a", 2048)},
 		{"info", "yes"}, {"info", ""}, {"info", "ON "}, {"info", "1"},
+		{"title", ""}, {"title", "seventeen chars!!"}, {"title", `say "hi"`}, {"title", "it's"}, {"title", `a\b`}, {"title", "<b>x</b>"},
+		{"title", "a&b"}, {"title", "café"}, {"title", " wren"}, {"title", "wren "}, {"title", "wren\nnotes"}, {"title", "wren\tnotes"}, {"title", "名前"},
 		{"colour", "red"}, {"", "x"}, {"Port", "9000"},
 	} {
 		if err := server.WriteSetting(ctx, db, c[0], c[1]); err == nil {
@@ -253,5 +255,19 @@ func TestEveryBadSettingIsRefusedAndNothingBadIsStored(t *testing.T) {
 	got, stored, err := server.ReadSettings(ctx, db)
 	if err != nil || len(stored) != 1 || !stored["port"] || got.Port != 8123 {
 		t.Errorf("only the valid port should be stored: %+v %v %v", got, stored, err)
+	}
+}
+
+func TestAGoodTitleIsAcceptedWhateverItIsMadeOf(t *testing.T) {
+	db := openCorpus(t)
+	ctx := context.Background()
+	for _, title := range []string{"a", "wren", "wren notes", "wren.local:8900", "doiel/notes (1)", "Lab-3_b, c@d", "1234567890123456"} {
+		if err := server.WriteSetting(ctx, db, "title", title); err != nil {
+			t.Errorf("title %q was refused: %v", title, err)
+			continue
+		}
+		if got, _, _ := server.ReadSettings(ctx, db); got.Title != title {
+			t.Errorf("title %q read back as %q", title, got.Title)
+		}
 	}
 }

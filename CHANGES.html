@@ -283,9 +283,10 @@ header, is read-only and never builds an index (a set with none is left
 out, and <code>server</code> says so on start).
 <code>server port N</code> runs it once on a port (0 is a free one),
 <code>server set NAME VALUE</code> stores a setting in the corpus (port,
-concurrency, results, css, info) and <code>server show</code> lists
-them. New exit codes for it: 73 for a port in use, 77 for a port the
-system refuses.</li>
+concurrency, results, css, info, title; the title is the name a browser
+offers in “Add NAME” for the search box, so give each service on a
+network its own) and <code>server show</code> lists them. New exit codes
+for it: 73 for a port in use, 77 for a port the system refuses.</li>
 </ul>
 <h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>

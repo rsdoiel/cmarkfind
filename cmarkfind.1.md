@@ -88,7 +88,7 @@ server | server port N | server set NAME VALUE | server show
   box (named by a Link header on every response, for clients that read
   Markdown), and, unless turned off, version, stats and the list of sets. port N runs
   it once on one port; set and show keep its settings (port, concurrency,
-  results, css, info) in the corpus. See cmarkfind-server(7).
+  results, css, info, title) in the corpus. See cmarkfind-server(7).
 
 stats [OPTIONS]
 : Say what the corpus holds: pages, pages gone, counts by site and tier, the
