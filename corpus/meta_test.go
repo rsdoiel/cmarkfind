@@ -177,15 +177,15 @@ func fieldsSet(t *testing.T) (*DB, string) {
 	return db, root
 }
 
-func TestTheDefaultMappingMakesKeywordsAndAuthorFacetsAndTheDateFieldsDates(t *testing.T) {
+func TestTheDefaultMappingMakesKeywordsAndAuthorFieldedAndTheDateFieldsDatesAndNothingAFacet(t *testing.T) {
 	db, site := fieldsSet(t)
 	m, err := db.FieldMapping(context.Background(), site)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for field, want := range map[string]string{
-		"keywords": "facet,fielded", "author": "facet,fielded",
-		"date": "date", "datepublished": "date", "datemodified": "date", "pubdate": "date", "created": "date",
+		"keywords": "fielded", "author": "fielded",
+		"date": "date", "datepublished": "date", "datecreated": "date", "datemodified": "date", "pubdate": "date", "created": "date",
 		"title": "built-in", "description": "built-in", "body": "built-in",
 	} {
 		if got := strings.Join(m.Roles(field), ","); got != want {
@@ -196,7 +196,7 @@ func TestTheDefaultMappingMakesKeywordsAndAuthorFacetsAndTheDateFieldsDates(t *t
 		t.Errorf("tags is unmapped by default, got %v", got)
 	}
 	f := m.Fields()
-	if !sort.StringsAreSorted(f) || len(f) != 10 {
+	if !sort.StringsAreSorted(f) || len(f) != 11 {
 		t.Errorf("fields %v", f)
 	}
 }
@@ -230,7 +230,7 @@ func TestAssignmentsOverrideTheDefaultAndNoneTurnsAFieldOff(t *testing.T) {
 	if err := db.SetFields(ctx, site, 0, ""); err != nil {
 		t.Fatal(err)
 	}
-	if m, _ = db.FieldMapping(ctx, site); strings.Join(m.Roles("author"), ",") != "facet,fielded" || len(m.Roles("tags")) != 0 {
+	if m, _ = db.FieldMapping(ctx, site); strings.Join(m.Roles("author"), ",") != "fielded" || len(m.Roles("tags")) != 0 {
 		t.Errorf("after reset: author %v tags %v", m.Roles("author"), m.Roles("tags"))
 	}
 }
@@ -239,7 +239,7 @@ func TestABadRoleOrFieldNameOrABuiltInFieldIsRefusedAndChangesNothing(t *testing
 	db, site := fieldsSet(t)
 	ctx := context.Background()
 	for _, bad := range [][]string{
-		{"author=facets"}, {"author=facet,nonsense"}, {"=facet"}, {"no equals sign"}, {"bad name=facet"}, {"a/b=facet"},
+		{"author=facets"}, {"=facet"}, {"no equals sign"}, {"bad name=facet"}, {"a/b=facet"},
 		{"title=facet"}, {"description=text"}, {"body=none"}, {"abstract=facet"},
 		{"author=facet", "keywords=wrong"}, // the first is not applied either
 	} {
@@ -248,7 +248,7 @@ func TestABadRoleOrFieldNameOrABuiltInFieldIsRefusedAndChangesNothing(t *testing
 		}
 	}
 	m, _ := db.FieldMapping(ctx, site)
-	if got := strings.Join(m.Roles("author"), ","); got != "facet,fielded" {
+	if got := strings.Join(m.Roles("author"), ","); got != "fielded" {
 		t.Errorf("a refused assignment changed author to %q", got)
 	}
 	if err := db.AssignFields(ctx, "https://nowhere.example/", []string{"a=facet"}); !errors.Is(err, ErrNoSet) {
@@ -310,5 +310,84 @@ func TestAnUnparsableDateIsWarnedAboutAtBuildAndTheErrorIsNil(t *testing.T) {
 	db.BuildSets(context.Background(), "", 0)
 	if w := db.IndexWarnings(); len(w) != 0 {
 		t.Errorf("a build that built nothing warned: %q", w)
+	}
+}
+
+func TestNoFieldIsAFacetByDefault(t *testing.T) {
+	db, site := fieldsSet(t)
+	m, _ := db.FieldMapping(context.Background(), site)
+	if f := m.Facets(); len(f) != 0 {
+		t.Errorf("facets by default: %v", f)
+	}
+}
+
+// FIELD=ROLE[,ROLE]...[,LABEL]: the label is the last item, quoted when it is
+// more than one word, and only a facet has one. With none given it is the field's
+// name as typed.
+func TestAFacetHasALabelFromTheAssignmentOrTheFieldNameAsTyped(t *testing.T) {
+	db, site := fieldsSet(t)
+	ctx := context.Background()
+	if err := db.AssignFields(ctx, site, []string{
+		`datePublished=date,facet,"Pub Date"`,
+		"keywords=facet,fielded,Topics",
+		"author=facet,fielded",
+		"DateCreated=date,facet",
+		`x=facet,"a, b"`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := db.FieldMapping(ctx, site)
+	want := map[string]string{"datepublished": "Pub Date", "keywords": "Topics", "author": "author", "datecreated": "DateCreated", "x": "a, b"}
+	for field, label := range want {
+		if got := m.Label(field); got != label {
+			t.Errorf("label of %s = %q, want %q", field, got, label)
+		}
+	}
+	if got := strings.Join(m.Roles("datepublished"), ","); got != "facet,date" {
+		t.Errorf("roles %q", got)
+	}
+	var facets []string
+	for _, f := range m.Facets() {
+		facets = append(facets, f.Field+"="+f.Label)
+	}
+	sort.Strings(facets)
+	if got := strings.Join(facets, "|"); got != "author=author|datecreated=DateCreated|datepublished=Pub Date|keywords=Topics|x=a, b" {
+		t.Errorf("facets %s", got)
+	}
+	if f := m.Facets(); !f[0].Date && f[0].Field == "datecreated" {
+		t.Errorf("a date facet says so: %+v", f[0])
+	}
+	// a label is dropped with the facet role, and a reset clears them all
+	db.AssignFields(ctx, site, []string{"keywords=fielded"})
+	if m, _ = db.FieldMapping(ctx, site); m.Label("keywords") != "" || len(m.Facets()) != 4 {
+		t.Errorf("keywords is no facet now: %q %v", m.Label("keywords"), m.Facets())
+	}
+	db.SetFields(ctx, site, 0, "")
+	if m, _ = db.FieldMapping(ctx, site); len(m.Facets()) != 0 {
+		t.Errorf("after reset: %v", m.Facets())
+	}
+}
+
+func TestABadLabelIsRefusedAndChangesNothing(t *testing.T) {
+	db, site := fieldsSet(t)
+	ctx := context.Background()
+	for _, bad := range []string{
+		`author=fielded,Writers`,    // a label without the facet role
+		`author=facet,"Writers`,     // an unterminated quote
+		`author=facet,""`,           // an empty label
+		`author=facet,Topics,Extra`, // two labels
+		`author=Topics`,             // no role at all
+		`author=facets`,             // a misspelt role is not a label
+		`author=none,Topics`,        // none and a label
+		`author=facet,` + strings.Repeat("x", 61),
+		"author=facet,\"two\nlines\"",
+		`author=facet,"a"b`,
+	} {
+		if err := db.AssignFields(ctx, site, []string{bad}); !errors.Is(err, ErrBadFieldMapping) {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	if m, _ := db.FieldMapping(ctx, site); len(m.Facets()) != 0 || strings.Join(m.Roles("author"), ",") != "fielded" {
+		t.Errorf("a refused assignment changed the mapping: %v", m.Facets())
 	}
 }

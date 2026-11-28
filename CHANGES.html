@@ -218,6 +218,30 @@ so a plain search finds them. <code>set fields</code> builds the set’s
 index at once when it changes the mapping, as a fill does.</li>
 <li>Every set is built again once after this release’s first search or
 fill (the build carries a revision).</li>
+<li>Facets are opt-in for every set:
+<code>set fields SET 'datePublished=date,facet,"Pub Date"' keywords=facet,fielded,Topics</code>
+defines them, one call, the label last (quoted if more than one word;
+with none, the field’s name as typed). A date field with the facet role
+is a facet of years, so <code>dateCreated</code> and
+<code>dateModified</code> can be faceted independently. A result that
+has values for a facet the sets define shows them: the Markdown has a
+Facets list before a Results list, each value a link <code>?q=</code>
+the new query (<code>&amp;set=</code> for <code>search-set</code>),
+labelled with the value and its count; <code>-json</code> has
+<code>"facets"</code> by field with <code>label</code> and
+<code>values</code> (value, count, query). No set facets by default
+(<code>keywords</code> and <code>author</code> are only
+<code>fielded</code>, the date names only <code>date</code>);
+<code>set fields</code> lists the labels and <code>set show</code> the
+facets.</li>
+<li>Date queries: <code>datePublished:2026</code>,
+<code>created:2026-06</code>,
+<code>datemodified:[2026-01 TO 2026-06]</code>, with <code>{</code>,
+<code>}</code> and <code>*</code>; a partial date is a period and an
+excluded bound drops all of it, so <code>[2026-01 TO 2026-07}</code> is
+the first half of 2026. Each date field is queried under its own name;
+there is no page date and no fallback. <code>datecreated</code> joins
+the default date field names.</li>
 </ul>
 <h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>

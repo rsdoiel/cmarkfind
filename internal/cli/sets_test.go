@@ -498,7 +498,7 @@ func TestSetFieldsShowsTheEffectiveMappingOneFieldPerLine(t *testing.T) {
 		got[f[0]] = f[1]
 	}
 	for field, want := range map[string]string{
-		"title": "built-in", "body": "built-in", "keywords": "facet,fielded", "author": "facet,fielded", "datepublished": "date",
+		"title": "built-in", "body": "built-in", "keywords": "fielded", "author": "fielded", "datepublished": "date", "datecreated": "date",
 	} {
 		if got[field] != want {
 			t.Errorf("%s = %q, want %q", field, got[field], want)
@@ -509,7 +509,7 @@ func TestSetFieldsShowsTheEffectiveMappingOneFieldPerLine(t *testing.T) {
 	}
 	j := parseJSON(t, do(t, "-db", db, "set", "fields", "-json", a).out)
 	fields, _ := j["fields"].(map[string]any)
-	if roles, _ := fields["author"].([]any); len(roles) != 2 || roles[0] != "facet" || roles[1] != "fielded" {
+	if roles, _ := fields["author"].([]any); len(roles) != 1 || roles[0] != "fielded" {
 		t.Errorf("json fields %v", j["fields"])
 	}
 	if j := parseJSON(t, do(t, "-db", db, "set", "show", "-json", a).out); j["fields"] != "default" {

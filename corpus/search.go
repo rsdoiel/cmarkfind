@@ -27,6 +27,40 @@ type Hit struct {
 	Tags                                        []string
 }
 
+/** FacetValue is one value of a facet: how many of the pages the search found
+ * have it, and the query that searches for the same pages again restricted to it.
+ *
+ * Fields:
+ *   Value (string) — the value, folded to lower case; a year for the year facet
+ *   Count (int)    — pages of the whole result that have it
+ *   Query (string) — the search's query with the facet's clause added
+ *
+ * Example:
+ *   v := corpus.FacetValue{Value: "go", Count: 12, Query: `(oberon) AND keywords:"go"`}
+ */
+type FacetValue struct {
+	Value string
+	Count int
+	Query string
+}
+
+/** FacetField is a facet of a result: a front matter field the set facets on, its
+ * label and its values, most pages first, at most 20.
+ *
+ * Fields:
+ *   Field (string)        — the front matter field, lower case
+ *   Label (string)        — what a reader sees: the label the set gave, else the field as typed
+ *   Values ([]FacetValue) — its values with counts (the years of a date field)
+ *
+ * Example:
+ *   f := corpus.FacetField{Field: "keywords", Label: "Topics"}
+ */
+type FacetField struct {
+	Field  string
+	Label  string
+	Values []FacetValue
+}
+
 /** Results is the answer to a search.
  *
  * Fields:
@@ -39,6 +73,7 @@ type Hit struct {
  *   fmt.Printf("%d hits, searched %d pages\n", len(r.Hits), r.Searched)
  */
 type Results struct {
+	Facets   []FacetField
 	Hits     []Hit
 	Searched int
 	Filtered int
@@ -143,7 +178,7 @@ func (d *DB) SearchWith(ctx context.Context, query string, opts SearchOptions) (
 	var hits []Hit
 	switch {
 	case strings.TrimSpace(query) != "":
-		hits, err = d.searchSets(ctx, sites, opts.Set == "", query, frag, fargs, limit)
+		hits, res.Facets, err = d.searchSets(ctx, sites, opts.Set == "", query, frag, fargs, limit)
 	case filtered:
 		hits, err = d.run(ctx, fmt.Sprintf(listSQL, frag), append(append([]any{}, fargs...), limit))
 	default:

@@ -48,20 +48,40 @@ does not fill a lookup with duplicates; search-set still reaches it. unignore
 puts it back. Nothing is ignored until you say so.
 
 fields shows how a set reads the front matter of its pages (the YAML header of
-a Markdown file): one line for each field with its roles. title, description
-(with abstract as its alias) and body are built in. The default maps keywords
-and author as facet,fielded, and date, datepublished, datemodified, pubdate and
-created as date. Field names are lower case; a page's keys are matched without
-regard to case. FIELD=ROLE,ROLE sets a field's roles, FIELD=none (or FIELD=)
-turns a field off, even a default one, and -reset returns the set to the default.
-The roles are facet (the field's whole values can be counted and followed),
-fielded (field:word finds pages by the words of the field), date (the field is a
-date for ranges and the year), and text (the field's words are searched with the
-description). A page's front matter is kept when it is filled, so a page stored
-before this was read again on the next fill. A date that cannot be read (not
-YYYY, YYYY-MM, YYYY-MM-DD, or a day with a time) is warned about, once for the page
-and field, and the page is left without it. A set's mapping changing makes its
-index out of date, and the next build replaces it.
+a Markdown file): one line for each field with its roles and, for a facet, its
+label. title, description (with abstract as its alias) and body are built in.
+FIELD=ROLE,ROLE sets a field's roles, FIELD=none (or FIELD=) turns a field off,
+even a default one, and -reset returns the set to the default. Field names are
+lower case in the mapping and in queries; a page's keys are matched without
+regard to case. The roles:
+
+    fielded   field:word finds pages by the words of the field (author:doiel)
+    date      the field is a date: field:2026-06 and field:[2026-01 TO 2026-06}
+    text      the field's words are searched with the description
+    facet     a facet of the field: its values (a date's years) are counted in
+              a result and followed as links
+
+The default maps keywords and author as fielded and date, datepublished,
+datecreated, datemodified, pubdate and created as date. Nothing is a facet until
+the set says so: a blog that is always written by one person has no use for an
+author facet, a newspaper has. A set defines its facets with one call; the last
+item after the roles is the facet's label, quoted when it is more than one word
+(single quotes round the argument in a shell), and with none the label is the
+field's name as typed:
+
+    cmarkfind set fields rsdoiel.github.io \
+        'datePublished=date,facet,"Pub Date"' keywords=facet,fielded,Topics
+
+    cmarkfind set fields my-novel dateCreated=date,facet dateModified=date,facet
+
+A date field with the facet role is a facet of years, so a writing tool can
+facet on the date a piece was created and the date it was last changed
+independently. There is no date a page is "dated" by: each date field is queried
+under its own name. Changing a set's mapping builds its index again at once. A
+page's front matter is kept when it is filled, so a page stored before this was
+read again on the next fill. A date that cannot be read (not YYYY, YYYY-MM,
+YYYY-MM-DD, or a day with a time) is warned about, once for the page and field,
+and the page is left without it. show lists a set's facets.
 
 Pins, tags and exclusions belong to the corpus and apply in every set.
 
@@ -86,7 +106,6 @@ cmarkfind-exit-status(7).
     cmarkfind set list
     cmarkfind set ignore tortuga.local
     cmarkfind set show rsdoiel.github.io
-    cmarkfind set fields rsdoiel.github.io tags=facet,fielded keywords=none
 
 # SEE ALSO
 

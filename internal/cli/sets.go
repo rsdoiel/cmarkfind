@@ -104,9 +104,13 @@ func (o *out) setShow(ctx context.Context, dbFile string, args []string) error {
 		if s.Fields != "" {
 			fields = "custom"
 		}
+		mp, merr := db.FieldMapping(ctx, s.Name)
+		if merr != nil {
+			return merr
+		}
 		if o.json {
 			m := map[string]any{"name": s.Name, "source": s.Source, "pages": s.Pages, "ignored": s.Ignored,
-				"fields": fields, "fields_version": s.FieldsVersion, "index": s.IndexDir, "built": s.Built}
+				"fields": fields, "fields_version": s.FieldsVersion, "index": s.IndexDir, "built": s.Built, "facets": facetDefsJSON(mp)}
 			if s.Root != "" {
 				m["root"] = s.Root
 			}
@@ -118,6 +122,14 @@ func (o *out) setShow(ctx context.Context, dbFile string, args []string) error {
 		if s.Root != "" {
 			fmt.Fprintf(o.stdout, "root %s\n", s.Root)
 		}
+		var fl []string
+		for _, f := range mp.Facets() {
+			fl = append(fl, fmt.Sprintf("%s (%s)", f.Label, f.Field))
+		}
+		if len(fl) == 0 {
+			fl = []string{"none"}
+		}
+		fmt.Fprintf(o.stdout, "facets %s\n", strings.Join(fl, ", "))
 		return nil
 	}
 	return fmt.Errorf("%w: %s", corpus.ErrNoSet, fset.Arg(0))
@@ -203,12 +215,26 @@ func (o *out) setFields(ctx context.Context, dbFile string, args []string) error
 		for _, f := range m.Fields() {
 			fields[f] = m.Roles(f)
 		}
-		b, _ := json.Marshal(map[string]any{"name": site, "fields": fields})
+		b, _ := json.Marshal(map[string]any{"name": site, "fields": fields, "facets": facetDefsJSON(m)})
 		fmt.Fprintf(o.stdout, "%s\n", b)
 		return nil
 	}
 	for _, f := range m.Fields() {
-		fmt.Fprintf(o.stdout, "%-14s %s\n", f, strings.Join(m.Roles(f), ","))
+		line := fmt.Sprintf("%-14s %s", f, strings.Join(m.Roles(f), ","))
+		if l := m.Label(f); l != "" {
+			line += fmt.Sprintf(" %q", l)
+		}
+		fmt.Fprintln(o.stdout, line)
 	}
 	return nil
+}
+
+// facetDefsJSON lists a mapping's facets for JSON: the field, its label and
+// whether it is a facet of years.
+func facetDefsJSON(m *corpus.Mapping) []map[string]any {
+	out := []map[string]any{}
+	for _, f := range m.Facets() {
+		out = append(out, map[string]any{"field": f.Field, "label": f.Label, "date": f.Date})
+	}
+	return out
 }

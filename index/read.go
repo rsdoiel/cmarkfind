@@ -586,6 +586,9 @@ type evaluator struct {
 // every page, never its complement, which would drop true answers.
 func (ev *evaluator) eval(n *Node) (map[int]float64, bool, error) {
 	switch n.Kind {
+	case KindRange:
+		out, err := ev.rangeLeaf(n)
+		return out, false, err
 	case KindTerm, KindPhrase:
 		if !isTextField(n.Field) {
 			out, err := ev.fieldLeaf(n)

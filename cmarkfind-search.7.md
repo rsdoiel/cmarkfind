@@ -32,6 +32,17 @@ matches. A set's index is built after the fill that changed it
 (cmarkfind-indexer(7)); one that is missing is built first, which takes a few
 seconds on a large set. To search one set only, see cmarkfind-search-set(7).
 
+A set can define facets (cmarkfind-set(7)). When the sets searched define some and
+the result has values for them, the Markdown has two lists: Facets first, each
+facet under its label with its values as links labelled with the value and its
+count, then Results, the hits as before. A facet link runs the query again
+restricted to that value: its target is ?q= and the new query encoded (and &set=
+and the set for search-set), for example (QUERY) AND keywords:"go" or
+(QUERY) AND datepublished:[2026 TO 2026]. The counts are of the whole result,
+not the page shown. With no facets the output is the one list of hits. -json has
+the same in "facets": an object by field, each with its "label" and its "values",
+each value with its "count" and its "query".
+
 # OPTIONS
 
 -limit N

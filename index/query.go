@@ -3,7 +3,9 @@ package index
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -45,16 +47,18 @@ const (
 	KindAnd
 	KindOr
 	KindNot
+	KindRange // a date field between two day numbers
 )
 
 /** Node is one node of a parsed query.
  *
  * Fields:
- *   Kind (Kind)      — term, phrase, and, or, not
+ *   Kind (Kind)      — term, phrase, range, and, or, not
  *   Field (string)   — "title", "description" or "body" for a leaf; "" for any
  *   Words ([]string) — a term's one word, or a phrase's words, lower case
  *   Prefix (bool)    — the last word is a prefix (trailing `*`)
  *   Kids ([]*Node)   — the operands of and, or and not
+ *   Lo, Hi (int)     — a range's first and last day numbers, openLow and openHigh for no bound
  *
  * Example:
  *   n, _ := index.ParseQuery(`go -draft`, nil) // (and go (not draft))
@@ -65,6 +69,7 @@ type Node struct {
 	Words  []string
 	Prefix bool
 	Kids   []*Node
+	Lo, Hi int // KindRange: first and last day number wanted (inclusive); openLow and openHigh when there is no bound
 }
 
 /** String writes the tree in a compact form: `go`, `title:go`, `mark*`,
@@ -88,6 +93,9 @@ func (n *Node) String() string {
 			parts = append(parts, k.String())
 		}
 		return "(" + strings.Join(parts, " ") + ")"
+	}
+	if n.Kind == KindRange {
+		return n.Field + ":[" + dayText(n.Lo, openLow) + " TO " + dayText(n.Hi, openHigh) + "]"
 	}
 	s := strings.Join(n.Words, " ")
 	if n.Prefix {
@@ -117,12 +125,14 @@ const (
 	tAnd
 	tOr
 	tNot
+	tRange // text = the date field; lo and hi the day numbers
 )
 
 type token struct {
-	kind tokKind
-	text string
-	star bool
+	kind   tokKind
+	text   string
+	star   bool
+	lo, hi int
 }
 
 /** ParseQuery reads a query string into a tree by the grammar and rules of the
@@ -142,7 +152,30 @@ type token struct {
  * Example:
  *   n, err := index.ParseQuery(`title:go (rust OR zig) -draft`, nil)
  */
-func ParseQuery(s string, fields []string) (*Node, error) {
+func ParseQuery(s string, fields []string) (*Node, error) { return ParseQueryFields(s, fields, nil) }
+
+/** ParseQueryFields is ParseQuery for an index (or the union of several) that has
+ * front matter fields. fields are the names a clause may name (title, description,
+ * body and the fielded fields); dates are the date fields, on which a clause
+ * `field:[2026-01 TO 2026-06]`, `field:{2025 TO 2027}` (`[` and `]` include a
+ * bound, `{` and `}` exclude it, `*` is no bound) and `field:2026-06` are read as
+ * a range of days. A partial date is a period: a bound includes or excludes the
+ * whole period, and a date as a term is the period. A range or date that cannot
+ * be read is read as words, like every malformed clause.
+ *
+ * Parameters:
+ *   s (string)        — what the person typed
+ *   fields ([]string) — the field names a clause may name; nil means title, description and body
+ *   dates ([]string)  — the fields among them that are dates
+ *
+ * Returns:
+ *   *Node — the tree, or nil when there is no searchable word
+ *   error — ErrQueryLimit when the query is too large
+ *
+ * Example:
+ *   n, err := index.ParseQueryFields(`created:[2026 TO 2027} AND go`, ix.QueryFields(), ix.DateFields())
+ */
+func ParseQueryFields(s string, fields, dates []string) (*Node, error) {
 	if len(s) > maxQueryBytes {
 		return nil, fmt.Errorf("%w: over %d bytes", ErrQueryLimit, maxQueryBytes)
 	}
@@ -153,7 +186,11 @@ func ParseQuery(s string, fields []string) (*Node, error) {
 	for _, f := range fields {
 		known[strings.ToLower(f)] = true
 	}
-	toks := lexQuery(s, known)
+	dateSet := map[string]bool{}
+	for _, f := range dates {
+		dateSet[strings.ToLower(f)] = true
+	}
+	toks := lexQuery(s, known, dateSet)
 	toks, err := matchParens(toks)
 	if err != nil {
 		return nil, err
@@ -202,7 +239,7 @@ func startsPrimary(r rune) bool {
 	return true
 }
 
-func lexQuery(s string, known map[string]bool) []token {
+func lexQuery(s string, known, dates map[string]bool) []token {
 	var toks []token
 	i := 0
 	rest := func() (rune, int) { return utf8.DecodeRuneInString(s[i:]) }
@@ -232,9 +269,9 @@ func lexQuery(s string, known map[string]bool) []token {
 				i += w
 				continue
 			}
-			i = lexChunk(s, i, known, &toks)
+			i = lexChunk(s, i, known, dates, &toks)
 		case isTermChar(r) || r == '\\':
-			i = lexChunk(s, i, known, &toks)
+			i = lexChunk(s, i, known, dates, &toks)
 		default: // [ ] { } : * stray: punctuation
 			i += w
 		}
@@ -268,7 +305,7 @@ func scanPhrase(s string, i int) (text string, end int, ok bool) {
 // lexChunk reads a term chunk (with escapes) at i, then a trailing `*`, an
 // operator word, or a field name before `:`; it appends one token and returns
 // the new position.
-func lexChunk(s string, i int, known map[string]bool, toks *[]token) int {
+func lexChunk(s string, i int, known, dates map[string]bool, toks *[]token) int {
 	start := i
 	var sb strings.Builder
 	escaped := false
@@ -297,6 +334,12 @@ func lexChunk(s string, i int, known map[string]bool, toks *[]token) int {
 		if k, ok := kind[text]; ok {
 			*toks = append(*toks, token{kind: k, text: text})
 			return i
+		}
+	}
+	if !escaped && i < len(s) && s[i] == ':' && dates[strings.ToLower(text)] && isFieldName(text) && i+1 < len(s) {
+		if tok, end, ok := lexDate(s, i+1, strings.ToLower(text)); ok {
+			*toks = append(*toks, tok)
+			return end
 		}
 	}
 	if !escaped && i < len(s) && s[i] == ':' && known[strings.ToLower(text)] && isFieldName(text) && i+1 < len(s) {
@@ -366,7 +409,7 @@ func operandStarts(toks []token, i int) bool {
 		return false
 	}
 	switch toks[i].kind {
-	case tTerm, tQuoted, tLParen, tField, tSign, tNot:
+	case tTerm, tQuoted, tLParen, tField, tSign, tNot, tRange:
 		return true
 	}
 	return false
@@ -379,7 +422,7 @@ func resolveOperators(toks []token) []token {
 	for i, t := range toks {
 		switch t.kind {
 		case tAnd, tOr:
-			left := len(out) > 0 && (out[len(out)-1].kind == tTerm || out[len(out)-1].kind == tQuoted || out[len(out)-1].kind == tRParen)
+			left := len(out) > 0 && (out[len(out)-1].kind == tTerm || out[len(out)-1].kind == tQuoted || out[len(out)-1].kind == tRParen || out[len(out)-1].kind == tRange)
 			if left && operandStarts(toks, i+1) {
 				out = append(out, t)
 			} else if t.text == "AND" || t.text == "OR" {
@@ -481,6 +524,9 @@ func (p *parser) parseClause() *Node {
 	case tQuoted:
 		p.pos++
 		n = leaf(t.text, false)
+	case tRange:
+		p.pos++
+		return &Node{Kind: KindRange, Field: t.text, Lo: t.lo, Hi: t.hi}
 	case tLParen:
 		p.pos++
 		n = p.parseOr()
@@ -571,4 +617,79 @@ func not(n *Node) *Node {
 		return nil
 	}
 	return &Node{Kind: KindNot, Kids: []*Node{n}}
+}
+
+// openLow and openHigh are the bounds of a range with no bound.
+const (
+	openLow  = math.MinInt
+	openHigh = math.MaxInt
+)
+
+// dayText writes a day number as YYYY-MM-DD, or * for no bound.
+func dayText(n, open int) string {
+	if n == open {
+		return "*"
+	}
+	return time.Unix(int64(n)*86400, 0).UTC().Format("2006-01-02")
+}
+
+// lexDate reads, at i (just after a date field's colon), a range `[A TO B]` or a
+// date (bare or quoted), and returns the token and where it ends. A bound is a
+// date or *. Anything else is not a date clause and the caller reads the text.
+func lexDate(s string, i int, field string) (token, int, bool) {
+	tok := token{kind: tRange, text: field, lo: openLow, hi: openHigh}
+	switch s[i] {
+	case '[', '{':
+		end := strings.IndexAny(s[i+1:], "]}")
+		if end < 0 {
+			return tok, 0, false
+		}
+		inner := strings.Fields(s[i+1 : i+1+end])
+		if len(inner) != 3 || !strings.EqualFold(inner[1], "TO") {
+			return tok, 0, false
+		}
+		closing := s[i+1+end]
+		if inner[0] != "*" {
+			first, last, ok := ParseDay(inner[0])
+			if !ok {
+				return tok, 0, false
+			}
+			tok.lo = first
+			if s[i] == '{' { // an exclusive bound drops its whole period
+				tok.lo = last + 1
+			}
+		}
+		if inner[2] != "*" {
+			first, last, ok := ParseDay(inner[2])
+			if !ok {
+				return tok, 0, false
+			}
+			tok.hi = last
+			if closing == '}' {
+				tok.hi = first - 1
+			}
+		}
+		return tok, i + 1 + end + 1, true
+	case '"':
+		text, end, ok := scanPhrase(s, i+1)
+		if !ok {
+			return tok, 0, false
+		}
+		first, last, ok := ParseDay(text)
+		if !ok {
+			return tok, 0, false
+		}
+		tok.lo, tok.hi = first, last
+		return tok, end, true
+	}
+	j := i
+	for j < len(s) && !isSpaceAt(s, j) && s[j] != ')' && s[j] != '(' && s[j] != '"' {
+		j++
+	}
+	first, last, ok := ParseDay(s[i:j])
+	if !ok {
+		return tok, 0, false
+	}
+	tok.lo, tok.hi = first, last
+	return tok, j, true
 }

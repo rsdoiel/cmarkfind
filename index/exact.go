@@ -95,6 +95,9 @@ func (pw pageWords) match(n *Node, field string) bool {
 	case KindNot:
 		return !pw.match(n.Kids[0], field)
 	}
+	if n.Kind == KindRange {
+		return rangeMatches(pw.frag, n)
+	}
 	if !isTextField(n.Field) {
 		return fieldMatches(pw.frag, n) // a front matter field: the values the fragment keeps
 	}

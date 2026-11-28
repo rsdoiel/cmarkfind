@@ -25,6 +25,10 @@ and body.
     (oberon OR modula) -tide groups
     author:doiel             pages whose author field has the word (see below)
     keywords:"static sites"  all the words, in the field's values
+    datepublished:2026-06    a date field: the month (also 2026, 2026-06-15)
+    created:[2026-01 TO 2026-06]   from January 1 to June 30; { and } exclude a bound
+    created:[2026-01 TO 2026-07}   the same first half: } drops all of July
+    created:[2025 TO *]      * is no bound
 
 A field of a page's front matter can be searched when the page's set maps it as
 fielded (cmarkfind-set(7); keywords and author are by default). The clause finds
@@ -33,7 +37,12 @@ asks for all of its words and a trailing * makes the last a prefix. A clause on 
 field no set maps is read as words: note:text is the words note and text. A clause
 on a field one searched set maps and another does not matches nothing in the
 other, and is not an error. A clause on a field selects pages and does not rank
-them; the words of the text do. Field names do not depend on case.
+them; the words of the text do. A date field (cmarkfind-set(7)) is queried with a
+date or a range of dates, in the forms YYYY, YYYY-MM and YYYY-MM-DD: a year or a
+month is the whole period, [ and ] include a bound, { and } exclude it, and
+an excluded year or month drops all of it ({2026-01 TO 2026-06} is February to
+May). A page with no date in the field is in no range. A range that cannot be read
+is read as words. Field names do not depend on case.
 
 Case does not matter, nor does the spelling of an accent or a letter form: an
 accent written as a combining mark, a ligature, a full-width letter and the

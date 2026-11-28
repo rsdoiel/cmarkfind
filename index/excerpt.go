@@ -148,6 +148,8 @@ func (ix *Index) Marks(n *Node, doc int) ([]Mark, error) {
 		switch n.Kind {
 		case KindNot:
 			return nil
+		case KindRange:
+			return nil // a date clause selects pages; there is no word of the text to mark
 		case KindTerm, KindPhrase:
 			if !isTextField(n.Field) {
 				return nil // a front matter clause selects pages; there is no word of the text to mark

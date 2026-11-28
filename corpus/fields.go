@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/rsdoiel/cmarkfind/index"
 )
@@ -22,6 +23,11 @@ import (
 // ErrBadFieldMapping says a role, a field name or an assignment is not usable
 // (exit class usage, 2).
 var ErrBadFieldMapping = errors.New("corpus: not a usable field mapping")
+
+const (
+	roleFacet = "facet"
+	roleDate  = "date"
+)
 
 // The four roles of a field, in the order they are listed.
 var fieldRoles = []string{"facet", "fielded", "date", "text"}
@@ -32,19 +38,18 @@ const BuiltInField = "built-in"
 
 var builtInFields = []string{"title", "description", "body"}
 
-// defaultFields is the built-in mapping. Date fields are listed in the order a
-// page's date is chosen from them.
+// defaultFields is the built-in mapping: what a query can use, and nothing that
+// shows in the output. No field is a facet until a set says so.
 var defaultFields = map[string][]string{
-	"keywords":      {"facet", "fielded"},
-	"author":        {"facet", "fielded"},
+	"keywords":      {"fielded"},
+	"author":        {"fielded"},
 	"date":          {"date"},
 	"datepublished": {"date"},
+	"datecreated":   {"date"},
 	"datemodified":  {"date"},
 	"pubdate":       {"date"},
 	"created":       {"date"},
 }
-
-var defaultDateOrder = []string{"date", "datepublished", "datemodified", "pubdate", "created"}
 
 var fieldNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
@@ -57,12 +62,35 @@ var fieldNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
  *   roles := m.Roles("author") // ["facet", "fielded"]
  */
 type Mapping struct {
-	roles map[string][]string
+	roles  map[string][]string
+	labels map[string]string
+}
+
+// fieldEntry is one override in the stored blob: the roles ([] turns a field off)
+// and a facet's label. The first form of the blob held the roles alone, as a list.
+type fieldEntry struct {
+	Roles []string `json:"roles"`
+	Label string   `json:"label,omitempty"`
+}
+
+func (e *fieldEntry) UnmarshalJSON(b []byte) error {
+	var list []string
+	if json.Unmarshal(b, &list) == nil {
+		e.Roles, e.Label = list, ""
+		return nil
+	}
+	type plain fieldEntry
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	*e = fieldEntry(p)
+	return nil
 }
 
 // mappingBlob is the stored form of a set's overrides.
 type mappingBlob struct {
-	Fields map[string][]string `json:"fields"`
+	Fields map[string]fieldEntry `json:"fields"`
 }
 
 func orderRoles(set map[string]bool) []string {
@@ -77,16 +105,19 @@ func orderRoles(set map[string]bool) []string {
 
 func equalRoles(a, b []string) bool { return strings.Join(a, ",") == strings.Join(b, ",") }
 
-func newMapping(over map[string][]string) *Mapping {
-	m := &Mapping{roles: map[string][]string{}}
+func newMapping(over map[string]fieldEntry) *Mapping {
+	m := &Mapping{roles: map[string][]string{}, labels: map[string]string{}}
 	for k, v := range defaultFields {
 		m.roles[k] = v
 	}
 	for k, v := range over {
-		if len(v) == 0 {
+		if len(v.Roles) == 0 {
 			delete(m.roles, k)
-		} else {
-			m.roles[k] = v
+			continue
+		}
+		m.roles[k] = v.Roles
+		if v.Label != "" {
+			m.labels[k] = v.Label
 		}
 	}
 	return m
@@ -143,9 +174,7 @@ func (m *Mapping) has(field, role string) bool {
 	return false
 }
 
-/** DateFields lists the fields with the date role in the order a page's date is
- * taken from them: the default fields first in their order, then any others by
- * name.
+/** DateFields lists the fields with the date role, by name.
  *
  * Returns:
  *   []string — lower case field names
@@ -155,24 +184,16 @@ func (m *Mapping) has(field, role string) bool {
  */
 func (m *Mapping) DateFields() []string {
 	var out []string
-	seen := map[string]bool{}
-	for _, f := range defaultDateOrder {
+	for f := range m.roles {
 		if m.has(f, "date") {
 			out = append(out, f)
-			seen[f] = true
 		}
 	}
-	var rest []string
-	for f := range m.roles {
-		if m.has(f, "date") && !seen[f] {
-			rest = append(rest, f)
-		}
-	}
-	sort.Strings(rest)
-	return append(out, rest...)
+	sort.Strings(out)
+	return out
 }
 
-func (d *DB) setOverrides(ctx context.Context, site string) (map[string][]string, error) {
+func (d *DB) setOverrides(ctx context.Context, site string) (map[string]fieldEntry, error) {
 	var blob string
 	err := d.sql.QueryRowContext(ctx, `SELECT fields FROM sets WHERE site = ?`, site).Scan(&blob)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -182,14 +203,14 @@ func (d *DB) setOverrides(ctx context.Context, site string) (map[string][]string
 		return nil, classify(err)
 	}
 	if blob == "" {
-		return map[string][]string{}, nil
+		return map[string]fieldEntry{}, nil
 	}
 	var b mappingBlob
 	if err := json.Unmarshal([]byte(blob), &b); err != nil {
 		return nil, fmt.Errorf("%w: the field mapping of %s is not readable: %v", ErrSchema, site, err)
 	}
 	if b.Fields == nil {
-		b.Fields = map[string][]string{}
+		b.Fields = map[string]fieldEntry{}
 	}
 	return b.Fields, nil
 }
@@ -222,89 +243,170 @@ func bad(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrBadFieldMapping, fmt.Sprintf(format, a...))
 }
 
-// parseAssignment reads FIELD=ROLE[,ROLE]... into a lower case field name and
-// its roles (empty for none).
-func parseAssignment(a string) (string, []string, error) {
-	name, roles, ok := strings.Cut(a, "=")
-	if !ok {
-		return "", nil, bad("%q is not FIELD=ROLE", a)
-	}
-	name = strings.ToLower(strings.TrimSpace(name))
-	if !fieldNameRE.MatchString(name) {
-		return "", nil, bad("%q is not a field name (letters, digits, - and _)", name)
-	}
-	for _, b := range append(builtInFields, "abstract") {
-		if name == b {
-			return "", nil, bad("%s is built in and cannot be mapped", name)
-		}
-	}
-	roles = strings.TrimSpace(roles)
-	if roles == "" || roles == "none" {
-		return name, nil, nil
-	}
-	have := map[string]bool{}
-	for _, r := range strings.Split(roles, ",") {
-		r = strings.TrimSpace(r)
-		ok := false
-		for _, known := range fieldRoles {
-			ok = ok || r == known
-		}
-		if !ok {
-			return "", nil, bad("%q is not a role (facet, fielded, date, text, or none)", r)
-		}
-		have[r] = true
-	}
-	return name, orderRoles(have), nil
+// assignment is one parsed FIELD=ROLE[,ROLE]...[,LABEL].
+type assignment struct {
+	name   string   // lower case
+	typed  string   // as it was typed, the label when none is given
+	roles  []string // facet, fielded, date, text in that order; none for a field turned off
+	label  string   // "" when none was given
+	hasLbl bool
 }
 
-/** AssignFields applies FIELD=ROLE[,ROLE]... assignments to a set's mapping. Roles
- * are facet, fielded, date and text, kept in that order whatever order they are
- * given in; FIELD=none (or FIELD= with no role) turns a field off, including a
- * default one. An assignment that equals the default removes the override. All
- * assignments are checked before any is applied. The set's index is out of date
- * afterwards when anything changed.
+// splitItems splits the roles and label on commas, outside quotes. A quoted item
+// is a whole item and ends at its closing quote.
+func splitItems(s string) ([]string, []bool, error) {
+	var items []string
+	var quoted []bool
+	i := 0
+	for i <= len(s) {
+		if i < len(s) && s[i] == '"' {
+			end := strings.IndexByte(s[i+1:], '"')
+			if end < 0 {
+				return nil, nil, bad("a quote is not closed in %q", s)
+			}
+			j := i + 1 + end + 1
+			if j < len(s) && s[j] != ',' {
+				return nil, nil, bad("text follows a closing quote in %q", s)
+			}
+			items = append(items, s[i+1:i+1+end])
+			quoted = append(quoted, true)
+			i = j + 1
+			continue
+		}
+		j := strings.IndexByte(s[i:], ',')
+		if j < 0 {
+			items = append(items, strings.TrimSpace(s[i:]))
+			quoted = append(quoted, false)
+			break
+		}
+		items = append(items, strings.TrimSpace(s[i:i+j]))
+		quoted = append(quoted, false)
+		i += j + 1
+	}
+	return items, quoted, nil
+}
+
+func validLabel(l string) error {
+	if strings.TrimSpace(l) == "" {
+		return bad("a label cannot be empty")
+	}
+	if len([]rune(l)) > 60 {
+		return bad("a label is at most 60 characters")
+	}
+	for _, r := range l {
+		if unicode.IsControl(r) {
+			return bad("a label has a control character")
+		}
+	}
+	return nil
+}
+
+// parseAssignment reads FIELD=ROLE[,ROLE]...[,LABEL]: the roles first, then an
+// optional label as the last item (quoted when it is more than one word), valid
+// only with the facet role.
+func parseAssignment(a string) (assignment, error) {
+	name, rhs, ok := strings.Cut(a, "=")
+	if !ok {
+		return assignment{}, bad("%q is not FIELD=ROLE", a)
+	}
+	typed := strings.TrimSpace(name)
+	as := assignment{name: strings.ToLower(typed), typed: typed}
+	if !fieldNameRE.MatchString(as.name) {
+		return assignment{}, bad("%q is not a field name (letters, digits, - and _)", name)
+	}
+	for _, b := range append(builtInFields, "abstract") {
+		if as.name == b {
+			return assignment{}, bad("%s is built in and cannot be mapped", as.name)
+		}
+	}
+	rhs = strings.TrimSpace(rhs)
+	if rhs == "" || rhs == "none" {
+		return as, nil
+	}
+	items, quoted, err := splitItems(rhs)
+	if err != nil {
+		return assignment{}, err
+	}
+	have := map[string]bool{}
+	for i, it := range items {
+		isRole := false
+		for _, known := range fieldRoles {
+			isRole = isRole || (!quoted[i] && it == known)
+		}
+		switch {
+		case isRole:
+			have[it] = true
+		case !quoted[i] && it == "none":
+			return assignment{}, bad("none cannot be combined with other roles")
+		default: // the label: the last item, with the facet role before it
+			if i != len(items)-1 {
+				return assignment{}, bad("%q is not a role (facet, fielded, date, text); a label is the last item", it)
+			}
+			if !have[roleFacet] {
+				return assignment{}, bad("%q is not a role (facet, fielded, date, text), and only a facet has a label", it)
+			}
+			if err := validLabel(it); err != nil {
+				return assignment{}, err
+			}
+			as.label, as.hasLbl = it, true
+		}
+	}
+	if len(have) == 0 {
+		return assignment{}, bad("%q gives no role", rhs)
+	}
+	as.roles = orderRoles(have)
+	if have[roleFacet] && !as.hasLbl {
+		as.label = as.typed // the field's name as it was typed
+	}
+	return as, nil
+}
+
+/** AssignFields applies FIELD=ROLE[,ROLE]...[,LABEL] assignments to a set's
+ * mapping. Roles are facet, fielded, date and text, kept in that order whatever
+ * order they are given in; FIELD=none (or FIELD= with no role) turns a field off,
+ * including a default one. The label is the last item, quoted when it is more
+ * than one word, valid only with the facet role; with none the facet is labelled
+ * with the field's name as typed. An assignment that equals the default removes
+ * the override. All assignments are checked before any is applied. The set's
+ * index is out of date afterwards when anything changed.
  *
  * Parameters:
  *   ctx (context.Context)  — cancels the update
  *   site (string)          — the set's site key, as ResolveSet returns it
- *   assignments ([]string) — each FIELD=ROLE,ROLE
+ *   assignments ([]string) — each FIELD=ROLE,ROLE or FIELD=facet,"A label"
  *
  * Returns:
- *   error — ErrBadFieldMapping for a bad role, field name or built-in field;
- *           ErrNoSet; database errors
+ *   error — ErrBadFieldMapping for a bad role, label, field name or built-in
+ *           field; ErrNoSet; database errors
  *
  * Example:
- *   err := db.AssignFields(ctx, site, []string{"tags=facet,fielded", "keywords=none"})
+ *   err := db.AssignFields(ctx, site, []string{`datePublished=date,facet,"Pub Date"`, "keywords=none"})
  */
 func (d *DB) AssignFields(ctx context.Context, site string, assignments []string) error {
 	if err := d.ensureSets(ctx); err != nil {
 		return err
 	}
-	type change struct {
-		name  string
-		roles []string
-	}
-	var changes []change
+	var parsed []assignment
 	for _, a := range assignments {
-		n, r, err := parseAssignment(a)
+		as, err := parseAssignment(a)
 		if err != nil {
 			return err
 		}
-		changes = append(changes, change{n, r})
+		parsed = append(parsed, as)
 	}
 	over, err := d.setOverrides(ctx, site)
 	if err != nil {
 		return err
 	}
-	for _, c := range changes {
-		def, isDefault := defaultFields[c.name]
+	for _, as := range parsed {
+		def, isDefault := defaultFields[as.name]
 		switch {
-		case isDefault && equalRoles(def, c.roles):
-			delete(over, c.name)
-		case !isDefault && len(c.roles) == 0:
-			delete(over, c.name)
+		case isDefault && as.label == "" && equalRoles(def, as.roles):
+			delete(over, as.name)
+		case !isDefault && len(as.roles) == 0:
+			delete(over, as.name)
 		default:
-			over[c.name] = append([]string{}, c.roles...) // [] is "off"
+			over[as.name] = fieldEntry{Roles: append([]string{}, as.roles...), Label: as.label} // [] is "off"
 		}
 	}
 	if len(over) == 0 {
@@ -314,7 +416,64 @@ func (d *DB) AssignFields(ctx context.Context, site string, assignments []string
 	if err != nil {
 		return err
 	}
-	return d.SetFields(ctx, site, 1, string(b))
+	return d.SetFields(ctx, site, 2, string(b))
+}
+
+/** Label is a facet's label: the one the set gave it, else the field's name as it
+ * was typed. A field that is not a facet has none.
+ *
+ * Parameters:
+ *   field (string) — the field's name, any case
+ *
+ * Returns:
+ *   string — the label; "" for a field that is not a facet
+ *
+ * Example:
+ *   label := m.Label("datepublished") // "Pub Date"
+ */
+func (m *Mapping) Label(field string) string {
+	f := strings.ToLower(field)
+	if !m.has(f, roleFacet) {
+		return ""
+	}
+	if l := m.labels[f]; l != "" {
+		return l
+	}
+	return f
+}
+
+/** FacetDef is a field a set facets on.
+ *
+ * Fields:
+ *   Field (string) — the front matter field, lower case
+ *   Label (string) — what a reader sees
+ *   Date (bool)    — true for a facet of years, false for a facet of values
+ *
+ * Example:
+ *   f := corpus.FacetDef{Field: "keywords", Label: "Topics"}
+ */
+type FacetDef struct {
+	Field, Label string
+	Date         bool
+}
+
+/** Facets lists the facets of the mapping, by field name.
+ *
+ * Returns:
+ *   []FacetDef — empty when the set defines no facet
+ *
+ * Example:
+ *   for _, f := range m.Facets() { fmt.Println(f.Field, f.Label) }
+ */
+func (m *Mapping) Facets() []FacetDef {
+	var out []FacetDef
+	for f := range m.roles {
+		if m.has(f, roleFacet) {
+			out = append(out, FacetDef{Field: f, Label: m.Label(f), Date: m.has(f, roleDate)})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Field < out[j].Field })
+	return out
 }
 
 // commaFields are the fields whose value, given as one string, is a list

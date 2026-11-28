@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // FieldSpec says what the build keeps of one front matter field.
@@ -302,7 +303,7 @@ func (f *fieldValues) add(doc int, vals []string) {
 		if v == "" {
 			continue
 		}
-		if f.spec.Facet {
+		if f.spec.Facet && !f.spec.Date { // a date field's facet is its years, from the days
 			appendDoc(f.values, term(v), doc)
 		}
 		if f.spec.Fielded {
@@ -400,4 +401,183 @@ func fieldValuesFor(specs []FieldSpec) ([]*fieldValues, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].spec.Name < out[j].spec.Name })
 	return out, nil
+}
+
+/** DateFields lists the fields with the date role, by name.
+ *
+ * Returns:
+ *   []string — sorted field names
+ *
+ * Example:
+ *   n, err := index.ParseQueryFields(q, ix.QueryFields(), ix.DateFields())
+ */
+func (ix *Index) DateFields() []string { return ix.fieldsWith(roleDate) }
+
+/** FacetFields lists the fields with the facet role, by name. A date field with
+ * the facet role is a facet of years (YearCounts); any other is a facet of
+ * values (FacetCounts).
+ *
+ * Returns:
+ *   []string — sorted field names
+ *
+ * Example:
+ *   for _, f := range ix.FacetFields() { _ = f }
+ */
+func (ix *Index) FacetFields() []string { return ix.fieldsWith(roleFacet) }
+
+func (ix *Index) fieldsWith(role string) []string {
+	var out []string
+	for name, r := range ix.m.Filters {
+		if r.has(role) {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+/** FacetCount is one value of a facet and the documents that have it.
+ *
+ * Fields:
+ *   Value (string) — the value, folded
+ *   Count (int)    — documents of the set asked about that have it
+ *
+ * Example:
+ *   c := index.FacetCount{Value: "go", Count: 12}
+ */
+type FacetCount struct {
+	Value string
+	Count int
+}
+
+/** FacetCounts counts, for each value of a facet field, the documents of docs
+ * that have it, most first and then by value. A value no document of docs has is
+ * left out. A field that is not a facet of values (unknown, a date, no facet role)
+ * has none.
+ *
+ * Parameters:
+ *   field (string)       — the field's name
+ *   docs (map[int]bool)  — the document numbers to count, usually a search's hits
+ *
+ * Returns:
+ *   []FacetCount — the values with their counts
+ *   error        — ErrData when the filter file is wrong
+ *
+ * Example:
+ *   counts, err := ix.FacetCounts("keywords", hitDocs)
+ */
+func (ix *Index) FacetCounts(field string, docs map[int]bool) ([]FacetCount, error) {
+	ref, ok := ix.m.Filters[field]
+	if !ok || !ref.has(roleFacet) || ref.has(roleDate) {
+		return nil, nil
+	}
+	ff, err := ix.filter(field)
+	if err != nil || ff == nil {
+		return nil, err
+	}
+	var out []FacetCount
+	for value, list := range ff.Values {
+		n := 0
+		for _, d := range list {
+			if docs[int(d)] {
+				n++
+			}
+		}
+		if n > 0 {
+			out = append(out, FacetCount{Value: value, Count: n})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Value < out[j].Value
+	})
+	return out, nil
+}
+
+/** YearCounts counts the documents of docs by the year of a date field. A
+ * document with no date in the field is not counted.
+ *
+ * Parameters:
+ *   field (string)       — a date field's name
+ *   docs (map[int]bool)  — the document numbers to count
+ *
+ * Returns:
+ *   map[int]int — documents for each year
+ *   error       — ErrData when the filter file is wrong
+ *
+ * Example:
+ *   years, err := ix.YearCounts("datepublished", hitDocs)
+ */
+func (ix *Index) YearCounts(field string, docs map[int]bool) (map[int]int, error) {
+	out := map[int]int{}
+	ref, ok := ix.m.Filters[field]
+	if !ok || !ref.has(roleDate) {
+		return out, nil
+	}
+	ff, err := ix.filter(field)
+	if err != nil || ff == nil {
+		return out, err
+	}
+	for d := range docs {
+		if d >= 0 && d < len(ff.Days) && ff.Days[d] != nil {
+			out[time.Unix(*ff.Days[d]*86400, 0).UTC().Year()]++
+		}
+	}
+	return out, nil
+}
+
+// rangeDocs returns the documents whose date in the field falls in the range.
+func (ix *Index) rangeDocs(n *Node) (map[int]bool, error) {
+	out := map[int]bool{}
+	ref, ok := ix.m.Filters[n.Field]
+	if !ok || !ref.has(roleDate) {
+		return out, nil
+	}
+	ff, err := ix.filter(n.Field)
+	if err != nil || ff == nil {
+		return out, err
+	}
+	for d, day := range ff.Days {
+		if day != nil && int(*day) >= n.Lo && int(*day) <= n.Hi {
+			out[d] = true
+		}
+	}
+	return out, nil
+}
+
+// rangeLeaf answers a range clause: the pages dated in it, none scored.
+func (ev *evaluator) rangeLeaf(n *Node) (map[int]float64, error) {
+	docs, err := ev.ix.rangeDocs(n)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int]float64, len(docs))
+	for d := range docs {
+		out[d] = 0
+	}
+	return out, nil
+}
+
+// rangeMatches is the page's own answer to a range clause, from the values its
+// fragment keeps: the first that is a date, as the build takes it.
+func rangeMatches(fr *fragmentRec, n *Node) bool {
+	var vals []string
+	switch v := fr.Fields[n.Field].(type) {
+	case string:
+		vals = []string{v}
+	case []any:
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				vals = append(vals, s)
+			}
+		}
+	}
+	for _, v := range vals {
+		if first, _, ok := ParseDay(strings.TrimSpace(v)); ok {
+			return first >= n.Lo && first <= n.Hi
+		}
+	}
+	return false
 }

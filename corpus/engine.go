@@ -275,7 +275,7 @@ const rrfK = 60
 // first, then the fused score, tier and address; cut at limit, with a bracketed
 // snippet each. The pinned and tag sets filter before ranking. With aggregate,
 // a set whose analyzer this program does not read is left out with a warning.
-func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int) ([]Hit, error) {
+func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, query, frag string, fargs []any, limit int) ([]Hit, []FacetField, error) {
 	// open each set's index first: a query's field clauses are parsed for the
 	// union of the fields the sets offer, and a set that lacks one matches nothing for it
 	type opened struct {
@@ -284,7 +284,8 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 	}
 	var sets []opened
 	fieldSet := map[string]bool{}
-	var fields []string
+	var fields, dateFields []string
+	dateSeen := map[string]bool{}
 	for _, site := range sites {
 		ix, err := d.currentSet(ctx, site)
 		if aggregate && index.IsAnalyzerError(err) {
@@ -295,9 +296,15 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		sets = append(sets, opened{site, ix})
+		for _, f := range ix.DateFields() {
+			if !dateSeen[f] {
+				dateSeen[f] = true
+				dateFields = append(dateFields, f)
+			}
+		}
 		for _, f := range ix.QueryFields() {
 			if !fieldSet[f] {
 				fieldSet[f] = true
@@ -305,17 +312,17 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 			}
 		}
 	}
-	node, err := index.ParseQuery(query, fields)
+	node, err := index.ParseQueryFields(query, fields, dateFields)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if node == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var ok map[string]bool
 	if frag != "" {
 		if ok, err = d.passing(ctx, frag, fargs); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	type cand struct {
@@ -324,12 +331,13 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		fused float64
 	}
 	var all []*cand
+	var found4facets []setHits
 	meta := map[string]pageMeta{}
 	for _, set := range sets {
 		ix := set.ix
 		found, err := ix.Search(node, 0)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if ok != nil {
 			kept := found[:0]
@@ -346,7 +354,7 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		}
 		m, err := d.metaOf(ctx, addrs)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		var mine []*cand
 		for _, h := range found {
@@ -369,6 +377,11 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		for i, c := range mine {
 			c.fused = 1 / float64(rrfK+i+1)
 		}
+		docs := make(map[int]bool, len(mine))
+		for _, c := range mine {
+			docs[c.h.Doc] = true
+		}
+		found4facets = append(found4facets, setHits{site: set.site, ix: ix, docs: docs})
 		all = append(all, mine...)
 	}
 	sort.SliceStable(all, func(i, j int) bool {
@@ -385,6 +398,10 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		}
 		return a.h.Address < b.h.Address
 	})
+	facets, err := d.facetsOf(ctx, found4facets, query)
+	if err != nil {
+		return nil, nil, err
+	}
 	if len(all) > limit {
 		all = all[:limit]
 	}
@@ -393,11 +410,11 @@ func (d *DB) searchSets(ctx context.Context, sites []string, aggregate bool, que
 		m := meta[c.h.Address]
 		snip, anchor, err := snippet(c.ix, node, c.h.Doc)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		hits = append(hits, Hit{Address: c.h.Address, Title: m.title, Site: m.site, Tier: m.tier, Snippet: snip, Anchor: anchor, Pinned: m.pinned})
 	}
-	return hits, nil
+	return hits, facets, nil
 }
 
 // snippetWords is the length of a snippet window.
