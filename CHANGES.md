@@ -3,6 +3,7 @@
 
 ## Unreleased
 
+- `fill -site-url ADDRESS` (folders): store every page under the address the site is published at (scheme, host and path prefix), whatever its outline lists. Without it, pages a relative outline link resolves to are stored under `http://site.local/` and `fill` warns on standard error.
 - Pin and tag: `pin` and `unpin` mark a page by its address so a pinned match is listed first; `tag` and `untag` give a page your own tags (letters, digits, `-`, `_`; folded to lower case; not part of the searched text). `pin -list` and `tag -list [ADDRESS]` show them. Pins and tags are kept by `forget` and by a refill.
 - `search -tag TAG` (repeatable, a page must carry every tag) and `search -pinned`; with either, the query may be left out and the pages that qualify are listed by title. JSON hits gain `pinned` and `tags`; `stats` gains `pinned`, `tags` and `tag_pages`.
 - Schema version 4 (two new tables); a version 3 file is upgraded in place. A cmarkbrowser built for schema 3 exits 65 on a version 4 file until it is released against this version: release cmarkfind first, then cmarkbrowser.

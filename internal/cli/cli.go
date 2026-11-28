@@ -214,6 +214,7 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 	batch := fset.Int("batch", 0, "")
 	every := fset.Duration("every", 0, "")
 	untilDone := fset.Bool("until-done", false, "")
+	siteURL := fset.String("site-url", "", "")
 	every0 := false
 	if err := parse(fset, args, o, j); err != nil {
 		return err
@@ -236,6 +237,14 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 	remote, tocURL, err := source(src)
 	if err != nil {
 		return err
+	}
+	if *siteURL != "" {
+		if remote {
+			return fmt.Errorf("%w: -site-url is for a folder; a web site's addresses are its own", ErrUsage)
+		}
+		if _, err := corpus.ParseSiteURL(*siteURL); err != nil {
+			return fmt.Errorf("%w: -site-url: %v", ErrUsage, err)
+		}
 	}
 	if !remote && *batch > 0 {
 		return fmt.Errorf("%w: -batch and -every are for web sites; a folder is read whole", ErrUsage)
@@ -264,9 +273,12 @@ func (o *out) fill(ctx context.Context, dbFile string, args []string) error {
 	}
 	defer db.Close()
 	if !remote {
-		rep, err := db.FillLocal(ctx, src, lim)
+		rep, err := db.FillLocalWith(ctx, src, lim, corpus.FillOptions{SiteURL: *siteURL})
 		if rep != nil {
 			o.report(rep, false)
+			if rep.Placeholder > 0 {
+				fmt.Fprintf(o.stderr, "%s: warning: %d pages are stored under http://site.local/ because the outline lists relative links; give the published address with -site-url\n", appName, rep.Placeholder)
+			}
 		}
 		o.indexWarnings(db)
 		return err

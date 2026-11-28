@@ -20,6 +20,12 @@
 <h1 id="change-log">Change log</h1>
 <h2 id="unreleased">Unreleased</h2>
 <ul>
+<li><code>fill -site-url ADDRESS</code> (folders): store every page
+under the address the site is published at (scheme, host and path
+prefix), whatever its outline lists. Without it, pages a relative
+outline link resolves to are stored under
+<code>http://site.local/</code> and <code>fill</code> warns on standard
+error.</li>
 <li>Pin and tag: <code>pin</code> and <code>unpin</code> mark a page by
 its address so a pinned match is listed first; <code>tag</code> and
 <code>untag</code> give a page your own tags (letters, digits,

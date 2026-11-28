@@ -35,6 +35,10 @@ fill [OPTIONS] SOURCE
   marked gone and is not searched. Options: -pause DURATION (between requests
   to one host, default 1s), -robots (obey robots.txt, default true), -user-agent
   TEXT, -max-pages N, -depth N (how many levels of included outlines), -json.
+  -site-url ADDRESS (a folder only) stores every page under the address the site
+  is published at, such as https://example.org/ or https://example.org/blog/,
+  whatever the outline lists; without it a relative link in the outline is
+  stored under http://site.local/ and fill warns.
   A big site can be read a few pages at a time: -batch N asks about at most N
   pages (never asked ones first, then the ones checked longest ago) and says
   how many remain; run it again to continue. -every DURATION (with -batch)

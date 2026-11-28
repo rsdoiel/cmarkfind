@@ -51,6 +51,12 @@ itself.
 -depth N
 : Follow included outlines N levels.
 
+-site-url ADDRESS
+: Folders only. Store every page under this published address (scheme, host and
+  path prefix) whatever the outline lists, keeping each page's own path. Needs
+  an http or https address with no query or fragment; exit 2 otherwise, or with a
+  web site. Filling again with another address marks the old ones gone.
+
 -batch N
 : Ask about at most N pages, then stop (web sites only).
 

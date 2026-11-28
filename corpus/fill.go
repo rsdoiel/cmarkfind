@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,6 +29,8 @@ import (
  *   Excluded (int) — pages an exclusion rule keeps out (not requested, not stored)
  *   Listed (int)   — pages the outline lists, not counting excluded ones
  *   Remaining (int) — listed pages never asked about (FillRemoteWith with a batch)
+ *   Placeholder (int) — pages stored under the placeholder host a relative
+ *                     outline link resolves to (FillLocal without a SiteURL)
  *   Complete (bool) — the outline was read in full; false when a limit cut it,
  *                     and then nothing is marked gone
  *
@@ -34,8 +38,8 @@ import (
  *   fmt.Printf("%d added, %d updated\n", r.Added, r.Updated)
  */
 type FillReport struct {
-	Added, Updated, Unchanged, Gone, Missing, Failed, Forbidden, Skipped, Excluded, Listed, Remaining int
-	Complete                                                                                          bool
+	Added, Updated, Unchanged, Gone, Missing, Failed, Forbidden, Skipped, Excluded, Listed, Remaining, Placeholder int
+	Complete                                                                                                       bool
 }
 
 /** FillLocal reads the pages a site on disk lists in its table of contents
@@ -59,11 +63,87 @@ type FillReport struct {
  *   r, err := db.FillLocal(ctx, "/home/me/site", toc.Limits{})
  */
 func (d *DB) FillLocal(ctx context.Context, root string, lim toc.Limits) (*FillReport, error) {
-	rep, err := d.fillLocal(ctx, root, lim)
+	return d.FillLocalWith(ctx, root, lim, FillOptions{})
+}
+
+/** FillLocalWith is FillLocal with options; only opts.SiteURL is used. With a
+ * SiteURL, every page the outline lists is stored under that address (scheme,
+ * host and path prefix) whatever address the outline gave it, which is how a
+ * folder whose outline lists relative links or the wrong host is stored under
+ * the address it is published at. Exclusion rules are tried against the stored
+ * address.
+ *
+ * Parameters:
+ *   ctx (context.Context) — cancels the fill
+ *   root (string)         — the site root, a folder
+ *   lim (toc.Limits)      — bounds on the outline walk; zero is the defaults
+ *   opts (FillOptions)    — SiteURL: the published address; empty keeps the outline's
+ *
+ * Returns:
+ *   *FillReport — as FillLocal
+ *   error       — as FillLocal; wraps ErrSiteURL when opts.SiteURL is not usable
+ *
+ * Example:
+ *   r, err := db.FillLocalWith(ctx, "/home/me/site", toc.Limits{}, corpus.FillOptions{SiteURL: "https://example.org/"})
+ */
+func (d *DB) FillLocalWith(ctx context.Context, root string, lim toc.Limits, opts FillOptions) (*FillReport, error) {
+	var base *url.URL
+	if opts.SiteURL != "" {
+		var err error
+		if base, err = ParseSiteURL(opts.SiteURL); err != nil {
+			return nil, err
+		}
+	}
+	rep, err := d.fillLocal(ctx, root, lim, base)
 	return d.afterFill(ctx, rep, err)
 }
 
-func (d *DB) fillLocal(ctx context.Context, root string, lim toc.Limits) (*FillReport, error) {
+/** ErrSiteURL is wrapped by ParseSiteURL and FillLocalWith for a published
+ * address that is not an http or https address with a host, or that carries a
+ * query or a fragment.
+ */
+var ErrSiteURL = errors.New("not a usable site address")
+
+/** ParseSiteURL checks the address a site is published at.
+ *
+ * Parameters:
+ *   s (string) — an http or https address with a host and, optionally, a path
+ *
+ * Returns:
+ *   *url.URL — the address, its path without a trailing slash
+ *   error    — wraps ErrSiteURL
+ *
+ * Example:
+ *   u, err := corpus.ParseSiteURL("https://example.org/blog/") // u.Path == "/blog"
+ */
+func ParseSiteURL(s string) (*url.URL, error) {
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" || strings.Contains(s, "?") || strings.Contains(s, "#") {
+		return nil, fmt.Errorf("%w: %q (want http:// or https:// and a host, optionally a path, no query or fragment)", ErrSiteURL, s)
+	}
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.RawPath = ""
+	return u, nil
+}
+
+// placeholderHost is the host markdownweb gives a relative link in a local
+// outline.
+const placeholderHost = "site.local"
+
+// rebase puts address under base: base's scheme, host and path prefix, then the
+// address's own path, query and fragment.
+func rebase(address string, base *url.URL) string {
+	u, err := url.Parse(address)
+	if err != nil {
+		return address
+	}
+	u.Scheme, u.Host, u.User = base.Scheme, base.Host, nil
+	u.Path = base.Path + u.Path
+	u.RawPath = ""
+	return u.String()
+}
+
+func (d *DB) fillLocal(ctx context.Context, root string, lim toc.Limits, base *url.URL) (*FillReport, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -87,9 +167,15 @@ func (d *DB) fillLocal(ctx context.Context, root string, lim toc.Limits) (*FillR
 		return nil, err
 	}
 	for _, p := range l.Pages {
+		if base != nil {
+			p.URL = rebase(p.URL, base)
+		}
 		if excluded(p.URL) {
 			rep.Excluded++
 			continue
+		}
+		if u, err := url.Parse(p.URL); base == nil && err == nil && u.Host == placeholderHost {
+			rep.Placeholder++
 		}
 		rep.Listed++
 		if p.Path == "" {

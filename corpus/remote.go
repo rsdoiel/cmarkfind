@@ -22,12 +22,17 @@ import (
  *   Batch (int) — ask about at most this many pages (cmarkfind DR-0004); 0 is
  *     the whole outline. The pages are the listed ones never asked about, in
  *     outline order, then the rest, the one checked longest ago first.
+ *   SiteURL (string) — FillLocalWith only: the address the site is published
+ *     at, such as "https://example.org" or "https://example.org/blog/"; every
+ *     listed page is stored under it, keeping its path, query and fragment.
+ *     Empty stores the addresses as the outline lists them. See ParseSiteURL.
  *
  * Example:
  *   opts := corpus.FillOptions{Batch: 50}
  */
 type FillOptions struct {
-	Batch int
+	Batch   int
+	SiteURL string
 }
 
 /** FillRemote reads the pages a table of contents on the web lists, all of them.
