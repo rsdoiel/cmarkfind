@@ -117,10 +117,17 @@ posting = [delta: uint, locations: [* int]]
 
 ; --------------------------------------------------------- document tables
 
-; One entry per document number of the range, in order: word_count and the
-; digest of the document's fragment file (32 bytes, not hex).
+; One entry per document number of the range, in order: word_count, the digest
+; of the document's fragment file (32 bytes, not hex) and the document's
+; address, the same text the fragment carries, so that a search can name every
+; page it finds without reading any page text. A reader that meets a row with no
+; address (an index written before it was added) reads the address from the
+; fragment; a reader that has both checks that they agree. A writer cuts a table
+; early when its rows would pass a quarter of the file limit, so tables of long
+; addresses stay under it; the ranges in the manifest say where.
 document-table = [1, "unicode-word-v3", generation: uint, rows: [* document-row]]
-document-row = [word_count: uint, fragment: bstr .size 32]
+document-row = [word_count: uint, fragment: bstr .size 32, address: tstr]
+             / [word_count: uint, fragment: bstr .size 32]
 
 ; --------------------------------------------------------------- fragments
 

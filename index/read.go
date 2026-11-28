@@ -536,6 +536,12 @@ func (ix *Index) Search(n *Node, limit int) ([]Hit, error) {
 		hits = hits[:limit]
 	}
 	for i := range hits {
+		// The address is in the document row; only an index written before
+		// rows carried it needs the page's fragment.
+		if d := hits[i].Doc; d >= 0 && d < len(rows) && rows[d].Address != "" {
+			hits[i].Address = rows[d].Address
+			continue
+		}
 		fr, err := ix.fragment(hits[i].Doc)
 		if err != nil {
 			return nil, err
@@ -885,6 +891,9 @@ func verifyIndex(ix *Index) error {
 		}
 		if fr.WordCount != r.WordCount {
 			return dataf("document %d: fragment has %d words, the table says %d", d, fr.WordCount, r.WordCount)
+		}
+		if r.Address != "" && r.Address != fr.Address {
+			return dataf("document %d: the table says %s, its fragment is of %s", d, r.Address, fr.Address)
 		}
 	}
 	return nil

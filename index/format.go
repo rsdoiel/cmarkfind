@@ -211,10 +211,15 @@ type wordChunk struct {
 	Entries    []entry
 }
 
+// documentRow is one page of a document table: its word count, the digest of
+// its fragment file and, since the address was added, the page's address, so
+// that a search learns the address of every hit without reading its text. An
+// index written before has rows of two elements and an empty Address.
 type documentRow struct {
 	_         struct{} `cbor:",toarray"`
 	WordCount uint64
 	Fragment  []byte
+	Address   string
 }
 
 type documentTable struct {
@@ -408,8 +413,24 @@ func (c *wordChunk) UnmarshalCBOR(b []byte) error {
 	return decodeRecord(b, "a word chunk", &c.Version, &c.Analyzer, &c.Generation, &c.Entries)
 }
 
+// UnmarshalCBOR reads a row of two or more elements: the word count and the
+// fragment digest, then the address when there is one (a row of an older index
+// has none), and ignores what follows, as the version rule says.
 func (r *documentRow) UnmarshalCBOR(b []byte) error {
-	return decodeRecord(b, "a document row", &r.WordCount, &r.Fragment)
+	if err := decodeRecord(b, "a document row", &r.WordCount, &r.Fragment); err != nil {
+		return err
+	}
+	var raw []cbor.RawMessage
+	if err := decMode.Unmarshal(b, &raw); err != nil {
+		return dataf("a document row is not an array")
+	}
+	r.Address = ""
+	if len(raw) >= 3 {
+		if err := decMode.Unmarshal(raw[2], &r.Address); err != nil {
+			return dataf("a document row's address is not text: %v", err)
+		}
+	}
+	return nil
 }
 
 func (d *documentTable) UnmarshalCBOR(b []byte) error {

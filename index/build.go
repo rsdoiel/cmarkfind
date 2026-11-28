@@ -293,7 +293,7 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 		}
 		note("fragment", ref.Size, "the text of "+d.Address)
 		digest, _ := hexDecode(ref.Digest)
-		rows = append(rows, documentRow{WordCount: uint64(len(surfaces)), Fragment: digest})
+		rows = append(rows, documentRow{WordCount: uint64(len(surfaces)), Fragment: digest, Address: d.Address})
 		totalWords += uint64(len(surfaces))
 	}
 
@@ -301,14 +301,25 @@ func buildInto(dir string, docs []Doc, opt BuildOptions, rep *BuildReport) error
 		Built: opt.Built.UTC().Format(time.RFC3339), Compression: compression,
 		Documents: documentsRec{Count: uint64(len(rows)), Words: totalWords}, Chunks: []chunkRef{}}
 
-	for first := 0; first < len(rows); first += docsPerTable {
-		last := min(first+docsPerTable, len(rows))
+	// A table holds up to docsPerTable rows and is cut earlier when its rows
+	// (an address each) would fill a quarter of the file limit, so a site of long
+	// addresses cannot make a table too big for a file.
+	for first := 0; first < len(rows); {
+		last, bytes := first, 0
+		for last < len(rows) && last-first < docsPerTable {
+			bytes += len(rows[last].Address) + len(rows[last].Fragment) + 16
+			if last > first && bytes > opt.FileLimit/4 {
+				break
+			}
+			last++
+		}
 		ref, err := encodeFileLimit(dir, "d", compression, documentTable{Version: 1, Analyzer: Analyzer, Generation: opt.Generation, Rows: rows[first:last]}, opt.FileLimit)
 		if err != nil {
 			return fmt.Errorf("a document table of %d pages: %w", last-first, err)
 		}
 		note("document table", ref.Size, fmt.Sprintf("a table of %d pages", last-first))
 		m.Documents.Ranges = append(m.Documents.Ranges, rangeRef{First: uint64(first), Last: uint64(last - 1), File: ref})
+		first = last
 	}
 
 	words := make([]string, 0, len(postings))

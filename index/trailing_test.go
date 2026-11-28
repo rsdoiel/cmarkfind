@@ -41,6 +41,7 @@ type (
 		_         struct{} `cbor:",toarray"`
 		WordCount uint64
 		Fragment  []byte
+		Address   string
 		Extra     string
 	}
 	tableX struct {
@@ -116,7 +117,7 @@ func TestAnUnknownTrailingElementOfARecordIsIgnored(t *testing.T) {
 			}
 			x := tableX{Version: dt.Version, Analyzer: dt.Analyzer, Generation: dt.Generation, Extra: "later"}
 			for _, r := range dt.Rows {
-				x.Rows = append(x.Rows, rowX{WordCount: r.WordCount, Fragment: r.Fragment, Extra: "later"})
+				x.Rows = append(x.Rows, rowX{WordCount: r.WordCount, Fragment: r.Fragment, Address: r.Address, Extra: "later"})
 			}
 			ref, err := encodeFile(dir, "d", m.Compression, x)
 			if err != nil {

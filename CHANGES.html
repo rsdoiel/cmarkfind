@@ -47,6 +47,12 @@ problem.</li>
 <li>A word on more than a million pages stops the index build (exit 73,
 naming the word and its page count) instead of writing an index no
 search could read; the index already in place is kept.</li>
+<li>A search no longer reads the text of every page it finds: the
+address of a page is in the index’s document table, so ranking costs the
+matches’ postings and not their page text. A word on 20,000 pages
+searched in 1.7 s and now in 0.11 s; a common character in a 3 million
+character corpus 0.29 s, now 0.14 s. An index written before is read the
+old way until the next fill rebuilds it.</li>
 <li>Pin and tag: <code>pin</code> and <code>unpin</code> mark a page by
 its address so a pinned match is listed first; <code>tag</code> and
 <code>untag</code> give a page your own tags (letters, digits,
