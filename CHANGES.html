@@ -135,13 +135,15 @@ search with no dictionary. A change of script ends a word
 (<code>iPhone手机</code> is <code>iPhone</code>, <code>手</code>,
 <code>机</code>); half-width katakana and decomposed kana match the
 normal forms. Snippets show Chinese and Japanese without spaces between
-characters and a longer window. Korean words are found as written
-(<code>한국어*</code> for a word with a particle); Thai, Lao, Khmer and
-Burmese are not segmented. A page of about two million CJK characters or
-more is too big for one index file: it is left out of the index with a
-warning that names it (<code>stats</code> lists it under “not indexed”),
-and the corpus stays searchable. The index words changed again, so an
-index is rebuilt once on first use.</li>
+characters and a longer window. Korean words are indexed as written, and
+a Korean query word of two or more syllables is read as a prefix, so
+<code>한국어</code> finds <code>한국어를</code> (a quoted word is
+exact); Thai, Lao, Khmer and Burmese are not segmented. A page of about
+two million CJK characters or more is too big for one index file: it is
+left out of the index with a warning that names it (<code>stats</code>
+lists it under “not indexed”), and the corpus stays searchable. The
+index words changed again, so an index is rebuilt once on first
+use.</li>
 <li>A phrase of very common words (four of the commonest Chinese
 characters in a row, or <code>of the</code>) is about ten times faster
 on a long page: the places of the word with the fewest are tried and

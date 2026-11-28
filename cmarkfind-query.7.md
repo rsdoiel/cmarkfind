@@ -34,8 +34,13 @@ of them: 東京都 finds the pages that have those three characters in a row, an
 that includes 東京都 inside a longer run of text. There is no dictionary; a
 search finds the characters you wrote, in order, and does not know where the
 words of a sentence begin and end. Korean is written with spaces and its words
-are found as written; a particle attached to a word (한국어를) is reached with a
-prefix, 한국어*. Thai, Lao, Khmer and Burmese are not segmented.
+are indexed as written, with the particle attached (한국어를). A Korean word of
+two or more syllables in a query is therefore read as a prefix: 한국어 finds
+한국어를, 한국어는 and 한국어. A word in quotation marks is not (the phrase "한국어"
+finds only the word 한국어), and a single syllable is not either. Thai, Lao,
+Khmer and Burmese are not segmented: a run of letters between spaces is one
+word, so a word in the middle of a clause cannot be found, only the start of
+it with a prefix (ภาษา*).
 
 A title match counts for more than a description match,
 and a description match for more than one in the body (bm25 with weights 4, 2

@@ -475,6 +475,9 @@ func (p *parser) parseClause() *Node {
 	case tTerm:
 		p.pos++
 		n = leaf(t.text, t.star)
+		if n != nil && n.Kind == KindTerm && isHangulStem(n.Words[0]) {
+			n.Prefix = true // a particle follows a Korean stem: 한국어 is found in 한국어를
+		}
 	case tQuoted:
 		p.pos++
 		n = leaf(t.text, false)
@@ -491,6 +494,21 @@ func (p *parser) parseClause() *Node {
 		setField(n, field)
 	}
 	return n
+}
+
+// isHangulStem says whether a query word is made only of Hangul syllables and
+// has at least two of them: such a word is read as a prefix, since Korean
+// attaches particles to the word they follow. One syllable is too short to be a
+// stem, and a quoted word is never a prefix (it does not come through here).
+func isHangulStem(word string) bool {
+	n := 0
+	for _, r := range word {
+		if r < 0xAC00 || r > 0xD7A3 {
+			return false
+		}
+		n++
+	}
+	return n >= 2
 }
 
 func setField(n *Node, field string) {
