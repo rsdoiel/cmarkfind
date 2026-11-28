@@ -22,7 +22,7 @@ var completionShells = []string{"bash", "powershell"}
 
 // completionFileFlags take a file or folder name, so completion offers files
 // after them. Each must be a value flag of some verb, or -db (a test checks).
-var completionFileFlags = []string{"db", "index"}
+var completionFileFlags = []string{"db"}
 
 // completionGlobalFlags go before the verb.
 var completionGlobalFlags = []string{"-db", "-help", "-license", "-version"}

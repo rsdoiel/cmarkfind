@@ -15,8 +15,9 @@ import (
 )
 
 // Tests for the switch from FTS5 to the partitioned index: written before the
-// code. They need DB.IndexDir, DB.BuildIndex, schema version 5 and a search
-// that reads the index.
+// code. They need DB.IndexDir, schema version 5 and a search that reads the
+// index. Since index sets, each set has its own folder under IndexDir/sets and
+// there is no corpus-wide index; the tests read the only set's folder.
 
 func tables(t *testing.T, path string) map[string]bool {
 	t.Helper()
@@ -51,7 +52,7 @@ func TestANewCorpusHasNoFTS5TableAndTheFillWritesTheIndexBesideIt(t *testing.T) 
 	if want := filepath.Join(filepath.Dir(path), "index"); db.IndexDir() != want {
 		t.Errorf("index dir %q, want %q", db.IndexDir(), want)
 	}
-	ix, err := index.Open(db.IndexDir())
+	ix, err := index.Open(setDirOf(t, db))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,8 +66,11 @@ func TestTheIndexDirectoryFollowsTheEnvironment(t *testing.T) {
 	t.Setenv("CMARKFIND_INDEX", dir)
 	db, _ := open(t)
 	fill(t, db, site(t, threePages))
-	if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(setDirOf(t, db), "manifest.json")); err != nil {
 		t.Error(err)
+	}
+	if !strings.HasPrefix(setDirOf(t, db), dir) {
+		t.Errorf("the set's index %s is not under %s", setDirOf(t, db), dir)
 	}
 }
 
@@ -76,7 +80,7 @@ func TestAFillThatChangesPagesRaisesTheGenerationAndOneThatChangesNothingDoesNot
 	root := site(t, threePages)
 	fill(t, db, root)
 	gen := func() uint64 {
-		ix, err := index.Open(db.IndexDir())
+		ix, err := index.Open(setDirOf(t, db))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -114,8 +118,8 @@ func TestForgetAndExcludeAndUnexcludeKeepTheIndexInStep(t *testing.T) {
 	if n := len(search(t, db, "otter").Hits); n != 0 {
 		t.Errorf("a forgotten page is still found: %d", n)
 	}
-	if ix, err := index.Open(db.IndexDir()); err != nil || ix.Count() != 0 {
-		t.Errorf("index after forget: %v %v", ix, err)
+	if sets, err := db.Sets(ctx); err != nil || len(sets) != 0 {
+		t.Errorf("sets after forget: %v %v", sets, err)
 	}
 }
 
@@ -123,13 +127,14 @@ func TestASearchBuildsAMissingIndex(t *testing.T) {
 	t.Setenv("CMARKFIND_INDEX", "")
 	db, _ := open(t)
 	fill(t, db, site(t, threePages))
+	dir := setDirOf(t, db)
 	if err := os.RemoveAll(db.IndexDir()); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(search(t, db, "otter").Hits); n != 1 {
 		t.Errorf("%d hits", n)
 	}
-	if _, err := os.Stat(filepath.Join(db.IndexDir(), "manifest.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil {
 		t.Error("the index was not rebuilt:", err)
 	}
 }
@@ -140,7 +145,7 @@ func TestASearchRebuildsAnIndexThatIsNotThisCorpusOnes(t *testing.T) {
 	fill(t, db, site(t, threePages))
 	// someone builds another index into the directory, a higher generation
 	other := []index.Doc{{Address: "https://elsewhere.example/x.md", Title: "X", Body: "zebra"}}
-	if err := index.Build(db.IndexDir(), other, index.BuildOptions{Generation: 99}); err != nil {
+	if err := index.Build(setDirOf(t, db), other, index.BuildOptions{Generation: 99}); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(search(t, db, "zebra").Hits); n != 0 {
@@ -255,7 +260,7 @@ func TestAVersion4FileUpgradesInPlaceDropsFTS5AndSearchesTheIndex(t *testing.T) 
 	}
 	var v string
 	db2.sql.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&v)
-	if v != "5" || SchemaVersion != 5 {
+	if v != "6" || SchemaVersion != 6 {
 		t.Errorf("schema_version %q, constant %d", v, SchemaVersion)
 	}
 }
@@ -292,7 +297,7 @@ func TestTwoBuildsAtOnceLeaveASoundIndexAndNeitherFails(t *testing.T) {
 	errs := make(chan error, 8)
 	for i := 0; i < 4; i++ {
 		go func() {
-			_, err := db.BuildIndex(ctx, db.IndexDir(), 0)
+			_, err := db.BuildSets(ctx, "", 0)
 			errs <- err
 		}()
 		go func() {
@@ -305,7 +310,7 @@ func TestTwoBuildsAtOnceLeaveASoundIndexAndNeitherFails(t *testing.T) {
 			t.Errorf("concurrent build or search: %v", err)
 		}
 	}
-	if err := index.Verify(db.IndexDir()); err != nil {
+	if err := index.Verify(setDirOf(t, db)); err != nil {
 		t.Errorf("index after concurrent builds: %v", err)
 	}
 	if n := len(search(t, db, "otter").Hits); n != 1 {
@@ -341,7 +346,7 @@ func TestASecondCorpusIsRefusedAnIndexFolderTheFirstOwnsAndTheFirstIsLeftAlone(t
 	ctx := context.Background()
 	one, _ := open(t)
 	fill(t, one, site(t, threePages))
-	gen := generationOf(t, shared)
+	gen := generationOf(t, setDirOf(t, one))
 
 	two := openAt(t)
 	_, err := two.FillLocal(ctx, site(t, map[string]*string{"z.md": s("# Zebras\n\nstripes\n")}), tocLimits())
@@ -356,7 +361,7 @@ func TestASecondCorpusIsRefusedAnIndexFolderTheFirstOwnsAndTheFirstIsLeftAlone(t
 			t.Fatalf("the owner lost its index: %d hits", n)
 		}
 	}
-	if g := generationOf(t, shared); g != gen {
+	if g := generationOf(t, setDirOf(t, one)); g != gen {
 		t.Errorf("generation %d, was %d: the index was rebuilt", g, gen)
 	}
 }
@@ -374,7 +379,8 @@ func TestAnIndexFolderWithNoOwnerIsAdoptedByTheFirstCorpusThatBuildsIt(t *testin
 		t.Errorf("%d hits", n)
 	}
 	two := openAt(t)
-	if _, err := two.Search(context.Background(), "otter", 10); !errors.Is(err, ErrIndexShared) {
+	two.FillLocal(context.Background(), site(t, map[string]*string{"z.md": s("# Zebras\n\nstripes\n")}), tocLimits()) // stores the page; the build is refused
+	if _, err := two.Search(context.Background(), "zebras", 10); !errors.Is(err, ErrIndexShared) {
 		t.Errorf("the adopted folder should now be owned: %v", err)
 	}
 }
@@ -394,25 +400,13 @@ func TestACopiedCorpusFileKeepsItsIndexFolder(t *testing.T) {
 	}
 }
 
-func TestExplicitBuildsIntoAnotherFolderDoNotClaimOrCheckOwnership(t *testing.T) {
-	shared := filepath.Join(t.TempDir(), "shared")
-	t.Setenv("CMARKFIND_INDEX", shared)
-	one, _ := open(t)
-	fill(t, one, site(t, threePages))
-	two := openAt(t)
-	elsewhere := filepath.Join(t.TempDir(), "mine")
-	if _, err := two.BuildIndex(context.Background(), elsewhere, 0); err != nil {
-		t.Errorf("a build into a folder that is not the corpus's own: %v", err)
-	}
-}
-
 func tocLimits() toc.Limits { return toc.Limits{} }
 
 func TestAnIndexOfAnEarlierAnalyzerIsRebuiltBySearch(t *testing.T) {
 	t.Setenv("CMARKFIND_INDEX", "")
 	db, _ := open(t)
 	fill(t, db, site(t, threePages))
-	mp := filepath.Join(db.IndexDir(), "manifest.json")
+	mp := filepath.Join(setDirOf(t, db), "manifest.json")
 	raw, err := os.ReadFile(mp)
 	if err != nil {
 		t.Fatal(err)
@@ -421,7 +415,7 @@ func TestAnIndexOfAnEarlierAnalyzerIsRebuiltBySearch(t *testing.T) {
 	if err := os.WriteFile(mp, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := index.Open(db.IndexDir()); err == nil {
+	if _, err := index.Open(setDirOf(t, db)); err == nil {
 		t.Fatal("a v1 index opened")
 	}
 	res, err := db.Search(context.Background(), "otter", 10)
@@ -431,7 +425,7 @@ func TestAnIndexOfAnEarlierAnalyzerIsRebuiltBySearch(t *testing.T) {
 	if res == nil || len(res.Hits) == 0 {
 		t.Fatal("no hits after the rebuild")
 	}
-	if _, err := index.Open(db.IndexDir()); err != nil {
+	if _, err := index.Open(setDirOf(t, db)); err != nil {
 		t.Fatalf("index after search: %v", err)
 	}
 }

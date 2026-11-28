@@ -138,16 +138,19 @@ func bashReplies(t *testing.T, scriptText, typed string) []string {
 }
 
 var completionCases = []struct{ typed, want string }{
-	{"", "completion exclude fill forget help indexer pin search stats tag unexclude unpin untag verbs"},
+	{"", "completion exclude fill forget help indexer pin search search-set set stats tag unexclude unpin untag verbs"},
 	{"fi", "fill"},
 	{"-", "-db -help -license -version"},
-	{"-db x.db se", "search"},
-	{"-db x.db ", "completion exclude fill forget help indexer pin search stats tag unexclude unpin untag verbs"},
+	{"-db x.db se", "search search-set set"},
+	{"-db x.db ", "completion exclude fill forget help indexer pin search search-set set stats tag unexclude unpin untag verbs"},
 	{"fill -s", "-site-url"},
 	{"fill -b", "-batch"},
 	{"fill -pause 5s -u", "-until-done -user-agent"},
 	{"search -tag go -l", "-limit"},
-	{"search -", "-index -json -limit -pinned -tag"},
+	{"search -", "-json -limit -pinned -tag"},
+	{"search-set -", "-json -limit -pinned -tag"},
+	{"set ", "fields ignore list show unignore"},
+	{"set fields -", "-json -reset"},
 	{"indexer ", "build list validate"},
 	{"indexer b", "build"},
 	{"indexer build -", "-chunk -json"},
@@ -155,7 +158,7 @@ var completionCases = []struct{ typed, want string }{
 	{"completion ", "bash powershell"},
 	{"completion bash -", "-check -install -json -uninstall"},
 	{"help v", "verbs"},
-	{"help ", "completion corpus exclude exit-status fill forget index indexer pin query search stats tag unexclude unpin untag verbs"},
+	{"help ", "completion corpus exclude exit-status fill forget index indexer pin query search search-set set stats tag unexclude unpin untag verbs"},
 	{"help fill ", ""},
 	{"stats -j", "-json"},
 }
@@ -177,10 +180,6 @@ func TestBashCompletesFileNamesAfterTheFileFlags(t *testing.T) {
 	got := bashReplies(t, script(t, "bash"), "-db cor")
 	if strings.Join(got, " ") != "corpus.db" {
 		t.Errorf("file completion after -db: %v", got)
-	}
-	got = bashReplies(t, script(t, "bash"), "search -index ")
-	if strings.Join(got, " ") != "corpus.db" {
-		t.Errorf("file completion after -index: %v", got)
 	}
 }
 

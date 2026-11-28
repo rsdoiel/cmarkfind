@@ -84,8 +84,8 @@ func TestSearchJSONIsUnchangedByTheMarkdownOutput(t *testing.T) {
 
 func TestSearchIndexPrintsTheSameMarkdownLinks(t *testing.T) {
 	clearEnv(t)
-	db, dir := built(t)
-	r := do(t, "-db", db, "search", "-index", dir, "badgers")
+	db, _, _ := built(t)
+	r := do(t, "-db", db, "search", "badgers")
 	if !strings.Contains(r.out, "- [Badgers](https://example.org/b.md)\n") {
 		t.Errorf("%s", r.out)
 	}
@@ -121,14 +121,5 @@ func TestSearchLinksTheHeadingTheMatchIsUnder(t *testing.T) {
 	h := j["hits"].([]any)[0].(map[string]any)
 	if h["anchor"] != "shallow-water" || h["address"] != "https://example.org/w.md" {
 		t.Errorf("%v", h)
-	}
-	_, dir := built(t)
-	_ = dir
-	idx := filepath.Join(t.TempDir(), "idx")
-	if r := do(t, "-db", db, "indexer", "build", idx); r.code != 0 {
-		t.Fatal(r)
-	}
-	if r := do(t, "-db", db, "search", "-index", idx, "crane"); !strings.Contains(r.out, "#shallow-water)") {
-		t.Errorf("-index: no fragment:\n%s", r.out)
 	}
 }

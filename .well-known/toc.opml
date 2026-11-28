@@ -2,7 +2,7 @@
 <opml version="2.0">
 	<head>
 		<title>cmarkfind</title>
-		<dateModified>Fri, 27 Nov 2026 17:47:16 -0800</dateModified>
+		<dateModified>Fri, 27 Nov 2026 17:47:21 -0800</dateModified>
 	</head>
 	<body>
 		<outline text="Pages">
@@ -10,6 +10,8 @@
 			<outline text="cmarkfind" url="https://rsdoiel.github.io/cmarkfind/cmarkfind.1.md"></outline>
 			<outline text="cmarkfind-fill" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-fill.7.md"></outline>
 			<outline text="cmarkfind-search" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-search.7.md"></outline>
+			<outline text="cmarkfind-search-set" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-search-set.7.md"></outline>
+			<outline text="cmarkfind-set" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-set.7.md"></outline>
 			<outline text="cmarkfind-indexer" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-indexer.7.md"></outline>
 			<outline text="cmarkfind-stats" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-stats.7.md"></outline>
 			<outline text="cmarkfind-forget" url="https://rsdoiel.github.io/cmarkfind/cmarkfind-forget.7.md"></outline>

@@ -22,7 +22,7 @@ cmarkfind -help | -version | -license
 cmarkfind keeps a corpus of Markdown pages in one SQLite file and searches it
 locally. It fills the corpus from a site's table of contents
 (/.well-known/toc.opml), from a folder on disk or over the web, builds a search
-index from the pages after each fill, and searches that index with a
+index for each site (an index set) after each fill, and searches those indexes with a
 Lucene-style query language. Nothing is sent anywhere by a search.
 
 # VERBS
@@ -46,7 +46,7 @@ fill [OPTIONS] SOURCE
   until nothing remains. A search says how many listed pages are not fetched yet.
 
 search [OPTIONS] QUERY...
-: Search the corpus. QUERY is words, "phrases", AND, OR, NOT and word*; text
+: Search every index set that is not ignored and merge the answers. QUERY is words, "phrases", AND, OR, NOT and word*; text
   that is not valid query syntax is searched as plain words. Prints each hit's
   title, address and tier, and the matching text; the count and how many pages
   were searched go to standard error. Options: -limit N (default 10), -tag TAG
@@ -55,6 +55,17 @@ search [OPTIONS] QUERY...
   listed by title. Pinned matches are listed first.
   Use -- before a query that starts with a dash.
 
+search-set [OPTIONS] SET QUERY...
+: Search one index set, ignored or not; options as search. See
+  cmarkfind-search-set(7).
+
+set list | show SET | ignore SET | unignore SET | fields [-reset] SET
+: An index set is one instance of a site (an outline on the web, or a folder),
+  made by fill and removed by forget, with an index of its own. list names the
+  sets, show says what one holds, ignore leaves one out of search (search-set
+  still reaches it), fields shows how it reads front matter. See
+  cmarkfind-set(7).
+
 pin ADDRESS... | pin -list, unpin ADDRESS...
 : Pin pages so they are listed first among the matches of a search, or take the
   pin off. See cmarkfind-pin(7).
@@ -62,10 +73,10 @@ pin ADDRESS... | pin -list, unpin ADDRESS...
 tag ADDRESS TAG... | tag -list [ADDRESS], untag ADDRESS TAG...
 : Give a page your own tags, or take them off. See cmarkfind-tag(7).
 
-indexer build [DIR] | indexer validate [DIR] | indexer [list] [DIR]
-: Write a search index from the corpus, check one, or say what one holds. DIR
-  defaults to CMARKFIND_INDEX, else an index folder beside the corpus. search
-  -index DIR QUERY searches it. See cmarkfind-indexer(7).
+indexer build [SET] | indexer validate [SET] | indexer [list] [SET]
+: Write the search index of each set that needs one (or of SET), check one, or
+  say what one holds. The indexes are kept in CMARKFIND_INDEX, else an index
+  folder beside the corpus. See cmarkfind-indexer(7).
 
 stats [OPTIONS]
 : Say what the corpus holds: pages, pages gone, counts by site and tier, the
@@ -120,7 +131,7 @@ help [TOPIC]
 : Success.
 
 1
-: search found nothing; forget's SITE or unexclude's PREFIX had nothing to
+: search or search-set found nothing, or every set is ignored; forget's SITE or unexclude's PREFIX had nothing to
   act on; robots.txt forbids the table of contents; completion -uninstall found
   nothing, or -check found a problem.
 
@@ -133,8 +144,8 @@ help [TOPIC]
   index is damaged.
 
 66
-: A folder, the corpus (for search and stats), a table of contents or an index
-  is missing.
+: A folder, the corpus (for search and stats), a table of contents, an index
+  or a set is missing.
 
 69
 : The site cannot be reached. A fill in which some pages failed finishes, prints
@@ -172,7 +183,7 @@ help [TOPIC]
 
 # SEE ALSO
 
-cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-indexer(7), cmarkfind-stats(7), cmarkfind-forget(7),
+cmarkfind-fill(7), cmarkfind-search(7), cmarkfind-search-set(7), cmarkfind-set(7), cmarkfind-indexer(7), cmarkfind-stats(7), cmarkfind-forget(7),
 cmarkfind-exclude(7), cmarkfind-unexclude(7), cmarkfind-pin(7),
 cmarkfind-unpin(7), cmarkfind-tag(7), cmarkfind-untag(7), cmarkfind-verbs(7),
 cmarkfind-completion(7), cmarkfind-query(7),

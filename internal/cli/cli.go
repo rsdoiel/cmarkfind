@@ -140,7 +140,7 @@ func RunContext(ctx context.Context, args []string, stdout, stderr io.Writer) in
 		}
 		return o.fail(helpTopic(stdout, topic, asJSON))
 	case "index":
-		return o.fail(fmt.Errorf("%w: there is no index verb; did you mean indexer (build, validate, list)? search takes -index DIR", ErrUsage))
+		return o.fail(fmt.Errorf("%w: there is no index verb; did you mean indexer (build, validate, list)?", ErrUsage))
 	}
 	if v, ok := findVerb(verb); ok && v.run != nil {
 		return o.fail(v.run(o, ctx, dbFile, rest))
@@ -358,10 +358,20 @@ func (t *tagList) String() string     { return strings.Join(*t, ",") }
 func (t *tagList) Set(v string) error { *t = append(*t, v); return nil }
 
 func (o *out) search(ctx context.Context, dbFile string, args []string) error {
-	fset, j := flags("search", o)
+	return o.runSearch(ctx, dbFile, args, "search", false)
+}
+
+// searchSet is search limited to one set: search-set NAME QUERY.
+func (o *out) searchSet(ctx context.Context, dbFile string, args []string) error {
+	return o.runSearch(ctx, dbFile, args, "search-set", true)
+}
+
+// runSearch is search and search-set. With oneSet the first argument names the
+// set to search.
+func (o *out) runSearch(ctx context.Context, dbFile string, args []string, verb string, oneSet bool) error {
+	fset, j := flags(verb, o)
 	limit := fset.Int("limit", 10, "")
 	pinned := fset.Bool("pinned", false, "")
-	idx := fset.String("index", "", "")
 	var tags tagList
 	fset.Var(&tags, "tag", "")
 	if err := parse(fset, args, o, j); err != nil {
@@ -370,28 +380,32 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 	if *limit < 1 {
 		return fmt.Errorf("%w: -limit must be at least 1", ErrUsage)
 	}
-	if idxSet(fset) {
-		if len(tags) > 0 || *pinned {
-			return fmt.Errorf("%w: -tag and -pinned search the corpus, not an index", ErrUsage)
+	rest, name := fset.Args(), ""
+	if oneSet {
+		if len(rest) == 0 {
+			return fmt.Errorf("%w: search-set takes a SET and a query", ErrUsage)
 		}
-		if *idx == "" {
-			return fmt.Errorf("%w: -index needs a directory", ErrUsage)
-		}
-		return o.searchIndex(*idx, strings.Join(fset.Args(), " "), *limit)
+		name, rest = rest[0], rest[1:]
 	}
-	if fset.NArg() == 0 && len(tags) == 0 && !*pinned {
-		return fmt.Errorf("%w: search needs a query, or -tag or -pinned", ErrUsage)
-	}
-	if *limit < 1 {
-		return fmt.Errorf("%w: -limit must be at least 1", ErrUsage)
+	if len(rest) == 0 && len(tags) == 0 && !*pinned {
+		return fmt.Errorf("%w: %s needs a query, or -tag or -pinned", ErrUsage, verb)
 	}
 	db, err := openExisting(dbFile)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	res, err := db.SearchWith(ctx, strings.Join(fset.Args(), " "), corpus.SearchOptions{Limit: *limit, Tags: tags, Pinned: *pinned})
+	opts := corpus.SearchOptions{Limit: *limit, Tags: tags, Pinned: *pinned}
+	if oneSet {
+		if opts.Set, err = db.ResolveSet(ctx, name); err != nil {
+			return err
+		}
+	}
+	res, err := db.SearchWith(ctx, strings.Join(rest, " "), opts)
 	o.indexWarnings(db)
+	if errors.Is(err, corpus.ErrAllIgnored) {
+		return negative("every set is ignored; set unignore NAME brings one back, or search-set NAME searches one anyway")
+	}
 	if err != nil {
 		return err
 	}
@@ -445,12 +459,6 @@ func (o *out) search(ctx context.Context, dbFile string, args []string) error {
 		return ErrNoMatch
 	}
 	return nil
-}
-
-func idxSet(fset *flag.FlagSet) bool {
-	set := false
-	fset.Visit(func(f *flag.Flag) { set = set || f.Name == "index" })
-	return set
 }
 
 func plural(n int, one, many string) string {

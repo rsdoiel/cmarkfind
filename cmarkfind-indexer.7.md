@@ -13,27 +13,30 @@ cmarkfind-indexer — build, check and list a search index
 
 # SYNOPSIS
 
-cmarkfind indexer build [-chunk N] [DIR]
+cmarkfind indexer build [-chunk N] [SET]
 
-cmarkfind indexer validate [DIR]
+cmarkfind indexer validate [SET]
 
-cmarkfind indexer [list] [DIR]
-
-cmarkfind search -index DIR QUERY...
+cmarkfind indexer [list] [SET]
 
 # DESCRIPTION
 
-An index is a folder of compressed files, made from the corpus, that a program
-can search without the corpus (and, later, over HTTP). build writes one from
-every page the corpus holds that is not gone and not under an excluded prefix.
-Building again replaces it: the generation number grows by one and files the
-new manifest no longer names are removed once they are ten minutes old, so
-a search that began before the rebuild can finish. The same pages always give the same
-files.
+An index is a folder of compressed files, made from the pages of one set
+(cmarkfind-set(7)), that a program can search without the corpus (and, later,
+over HTTP). Each set has an index folder of its own and there is no index of
+the whole corpus. build writes the index of every set that needs one, or of
+SET: a set needs one when it has none, when the one there is not the one this
+corpus last built, or when what it is made from has changed (its pages after
+exclusions, its field mapping). A set that needs nothing is left alone, and
+build says how many it built and how many it left. Building again replaces an
+index: the generation number grows by one and files the new manifest no longer
+names are removed once they are ten minutes old, so a search that began before
+the rebuild can finish. The same pages always give the same files, so a set's
+folder is a complete index that can be published as it is.
 
-validate reads every file and checks it against the digest in manifest.json.
-list says what an index holds: pages, chunks, generation and when it was built,
-and the words it holds without positions.
+validate reads every file of an index and checks it against the digest in
+manifest.json. list says what an index holds: pages, chunks, generation and
+when it was built, and the words it holds without positions.
 
 A word on a great many pages (a very common word such as "the", in any
 language) can make its entry too big for one index file. Over about 2 MiB an
@@ -61,18 +64,18 @@ Japanese characters in a page) cannot be written. The build leaves that page out
 warns on standard error with its address, and goes on; the page stays in the
 corpus and is not searchable. stats lists such pages as "not indexed".
 
-DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
-named index beside the corpus file (so -db moves both). The corpus builds its own index in that folder after every fill, forget or
-exclude that changed pages, and plain search reads it; a search finding it
-missing, or built by something else, builds it first. indexer build rebuilds it
-by hand, and search -index DIR searches any other index.
+The indexes are kept in the folder named by the CMARKFIND_INDEX variable, else
+a folder named index beside the corpus file (so -db moves both), one folder
+under it for each set. A fill, forget or exclude that changed pages builds the
+indexes of the sets it touched, and plain search reads them; a search that finds
+one missing, or built by something else, builds it first. forget removes the
+set's index with its pages. An older cmarkfind kept one index for the whole
+corpus at the top of that folder; the first build removes it.
 
 The folder is the corpus's own: the first corpus to build into it writes a small
 file, .cmarkfind-owner, naming itself, and a second corpus pointed at the same
 folder is refused (exit 78) instead of rebuilding over the first on every
-search. An index with no owner file (built by an older cmarkfind) goes to the
-first corpus that builds it. indexer build DIR into any other folder does not
-claim it.
+search. A folder with no owner file goes to the first corpus that builds in it.
 
 # OPTIONS
 
@@ -84,15 +87,17 @@ claim it.
 
 # EXIT STATUS
 
-66 when DIR holds no index (or, for build, there is no corpus), 65 when an index
-is damaged, 73 when DIR cannot be created. See cmarkfind-exit-status(7).
+66 when SET is not a set or has no index (or there is no corpus), 2 when SET
+fits more than one set, 65 when an index is damaged, 73 when an index cannot be
+written. validate checks every set and exits with the first failure's class.
+See cmarkfind-exit-status(7).
 
 # EXAMPLES
 
     cmarkfind indexer build
+    cmarkfind indexer build rsdoiel.github.io
     cmarkfind indexer validate
-    cmarkfind search -index ~/.local/share/cmarkfind/index 'title:otter OR "shallow water"'
 
 # SEE ALSO
 
-cmarkfind(1), cmarkfind-search(7), cmarkfind-query(7), cmarkfind-corpus(7)
+cmarkfind(1), cmarkfind-set(7), cmarkfind-search(7), cmarkfind-query(7), cmarkfind-corpus(7)

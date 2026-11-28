@@ -17,7 +17,7 @@ func specNames() []string {
 }
 
 func TestTheRegistryNamesEveryVerb(t *testing.T) {
-	want := "completion exclude fill forget help indexer pin search stats tag unexclude unpin untag verbs"
+	want := "completion exclude fill forget help indexer pin search search-set set stats tag unexclude unpin untag verbs"
 	got := specNames()
 	sort.Strings(got)
 	if strings.Join(got, " ") != want {
@@ -79,7 +79,9 @@ func flagNames(fl []flagInfo) string {
 func TestVerbFlagsAreReadFromTheVerbs(t *testing.T) {
 	cases := map[string]string{
 		"fill":          "batch depth every json max-pages pause robots site-url until-done user-agent",
-		"search":        "index json limit pinned tag",
+		"search":        "json limit pinned tag",
+		"search-set":    "json limit pinned tag",
+		"set fields":    "json reset",
 		"stats":         "json",
 		"forget":        "all dry-run json",
 		"indexer build": "chunk json",

@@ -31,16 +31,17 @@ Success.
 </dd>
 <dt>1</dt>
 <dd>
-The answer is no: search found nothing (also over an index); forget’s
-SITE or unexclude’s PREFIX had nothing to act on; robots.txt forbids the
-table of contents; completion -uninstall found nothing, or -check found
-a problem.
+The answer is no: search or search-set found nothing, or every set is
+ignored; forget’s SITE or unexclude’s PREFIX had nothing to act on;
+robots.txt forbids the table of contents; completion -uninstall found
+nothing, or -check found a problem.
 </dd>
 <dt>2</dt>
 <dd>
 Bad command line: unknown verb, option or topic, missing argument, bad
 value; a query is too large (over 1,024 bytes, 64 clauses or 8 levels of
-parentheses).
+parentheses); a set name that fits more than one set (the http and https
+of one host).
 </dd>
 <dt>65</dt>
 <dd>
@@ -51,7 +52,8 @@ is wrong).
 <dt>66</dt>
 <dd>
 A folder, the corpus (for search and stats) or a table of contents is
-missing; an index is missing (no manifest.json in its folder).
+missing; a set is not known; an index is missing (no manifest.json in
+its folder).
 </dd>
 <dt>69</dt>
 <dd>

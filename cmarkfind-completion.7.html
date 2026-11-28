@@ -27,10 +27,9 @@ PowerShell</p>
 <h1 id="description">DESCRIPTION</h1>
 <p>Write a completion script for a shell. It completes the verbs,
 indexer’s subverbs, each verb’s options, the help topics, and file names
-where a file is wanted (-db, -index and the arguments of fill and
-indexer). The lists come from the verbs themselves (see
-cmarkfind-verbs(7)), so a new verb or option is completed with no change
-to the script generator.</p>
+where a file is wanted (-db and the arguments of fill). The lists come
+from the verbs themselves (see cmarkfind-verbs(7)), so a new verb or
+option is completed with no change to the script generator.</p>
 <p>With no option the script goes to standard output. Load it for one
 session:</p>
 <pre><code>eval &quot;$(cmarkfind completion bash)&quot;

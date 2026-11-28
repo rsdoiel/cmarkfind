@@ -18,7 +18,7 @@ import (
 )
 
 // SchemaVersion is the schema this package reads and writes.
-const SchemaVersion = 5
+const SchemaVersion = 6
 
 var (
 	// ErrSchema says the file is not a corpus this package can use: not a
@@ -40,6 +40,19 @@ CREATE TABLE IF NOT EXISTS tags (address TEXT NOT NULL, tag TEXT NOT NULL, added
 CREATE INDEX IF NOT EXISTS tags_by_tag ON tags(tag);
 CREATE TABLE IF NOT EXISTS attempts (address TEXT PRIMARY KEY, site TEXT NOT NULL, checked_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sites (site TEXT PRIMARY KEY, listed INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS sets (
+	site          TEXT PRIMARY KEY,
+	source        TEXT NOT NULL DEFAULT 'local',
+	ignored       INTEGER NOT NULL DEFAULT 0,
+	fields_version INTEGER NOT NULL DEFAULT 0,
+	fields        TEXT NOT NULL DEFAULT '',
+	input_digest  TEXT NOT NULL DEFAULT '',
+	generation    INTEGER NOT NULL DEFAULT 0,
+	document_only TEXT NOT NULL DEFAULT '',
+	not_indexed   TEXT NOT NULL DEFAULT '',
+	added_at      TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS collections (name TEXT PRIMARY KEY, root TEXT NOT NULL, added_at TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS pages (
 	address       TEXT PRIMARY KEY,
 	site          TEXT NOT NULL DEFAULT '',
@@ -128,7 +141,8 @@ func Open(path string) (*DB, error) {
 	return &DB{sql: raw, path: path}, nil
 }
 
-// upgrade takes a file from schema version from to SchemaVersion. Version 5
+// upgrade takes a file from schema version from to SchemaVersion. Version 6
+// adds the sets and collections tables (created with the schema above). Version 5
 // drops the FTS5 table and its triggers (search reads the index now); the next
 // search builds the index.
 func upgrade(raw *sql.DB, from int) error {

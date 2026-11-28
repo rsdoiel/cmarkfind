@@ -25,33 +25,28 @@ it is pinned and its tags, then the matching text with the matched words in
 has the same facts for programs. The count and how many pages were searched go to standard error.
 QUERY is words, "phrases", AND, OR, NOT, -word, word* and title:word; see
 cmarkfind-query(7). Text that is not valid query syntax is searched as plain
-words. The search reads the index that the last fill built beside the corpus
-(cmarkfind-indexer(7)); when it is missing or is not the corpus's own, search
-builds it first, which takes a few seconds on a large corpus.
+words. The search reads the index of every set that is not ignored
+(cmarkfind-set(7)), each set alone, and merges the answers by reciprocal rank
+fusion, so a small site's best page is not buried by a large site's several
+matches. A set's index is built after the fill that changed it
+(cmarkfind-indexer(7)); one that is missing is built first, which takes a few
+seconds on a large set. To search one set only, see cmarkfind-search-set(7).
 
 # OPTIONS
 
 -limit N
 : At most N hits. Default 10.
 
--index DIR
-: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus's
-  own index; the pins, tags and tiers of the corpus do not apply, so -tag and
-  -pinned do not either. Exit 66 when DIR holds no index, 65 when it is damaged,
-  2 when the query is too large.
-
 -json
 : Write {"hits": [...], "searched": N}; each hit has "anchor", the heading slug
-  (empty when there is none). With -index each hit also has "excerpt"
-  (the best 30 words, HTML-escaped, each matched word in <mark>) and, when the
-  excerpt sits under a heading, "anchor" (the heading's slug, for address#anchor).
+  (empty when there is none).
 
 Use -- before a query that starts with a dash.
 
 # EXIT STATUS
 
-1 when nothing matches, 66 when there is no corpus yet. See
-cmarkfind-exit-status(7).
+1 when nothing matches, or every set is ignored; 66 when there is no corpus yet.
+See cmarkfind-exit-status(7).
 
 # EXAMPLES
 

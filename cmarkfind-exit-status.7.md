@@ -22,13 +22,14 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : Success.
 
 1
-: The answer is no: search found nothing (also over an index); forget's SITE or unexclude's PREFIX
+: The answer is no: search or search-set found nothing, or every set is ignored; forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents; completion
   -uninstall found nothing, or -check found a problem.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
-  a query is too large (over 1,024 bytes, 64 clauses or 8 levels of parentheses).
+  a query is too large (over 1,024 bytes, 64 clauses or 8 levels of parentheses);
+  a set name that fits more than one set (the http and https of one host).
 
 65
 : The file is not a corpus or has a newer schema; a source is malformed; an
@@ -36,7 +37,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 
 66
 : A folder, the corpus (for search and stats) or a table of contents is missing;
-  an index is missing (no manifest.json in its folder).
+  a set is not known; an index is missing (no manifest.json in its folder).
 
 69
 : The site cannot be reached.

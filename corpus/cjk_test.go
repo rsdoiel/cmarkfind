@@ -42,7 +42,7 @@ func TestAnIndexOfTheEarlierWordRuleIsRebuiltAndFindsChineseAndJapanese(t *testi
 	t.Setenv("CMARKFIND_INDEX", "")
 	db, _ := open(t)
 	fill(t, db, site(t, cjkPages))
-	mp := filepath.Join(db.IndexDir(), "manifest.json")
+	mp := filepath.Join(setDirOf(t, db), "manifest.json")
 	raw, err := os.ReadFile(mp)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestAnIndexOfTheEarlierWordRuleIsRebuiltAndFindsChineseAndJapanese(t *testi
 	if err := os.WriteFile(mp, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := index.Open(db.IndexDir()); err == nil {
+	if _, err := index.Open(setDirOf(t, db)); err == nil {
 		t.Fatal("a v2 index opened")
 	}
 	res, err := db.Search(context.Background(), "猫", 10)

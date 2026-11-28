@@ -59,6 +59,7 @@ type SearchOptions struct {
 	Limit  int
 	Tags   []string
 	Pinned bool
+	Set    string // search only this set (a site key as ResolveSet returns it); empty searches every set not ignored
 }
 
 const hitColumns = `p.address, p.title, p.site, p.tier, EXISTS(SELECT 1 FROM pins k WHERE k.address = p.address)`
@@ -119,8 +120,13 @@ func (d *DB) SearchWith(ctx context.Context, query string, opts SearchOptions) (
 	if err != nil {
 		return nil, err
 	}
+	sites, err := d.setsToSearch(ctx, opts.Set)
+	if err != nil {
+		return nil, err
+	}
 	res := &Results{}
-	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM pages WHERE gone_at = ''`).Scan(&res.Searched); err != nil {
+	in, inArgs := inList(sites)
+	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM pages WHERE gone_at = '' AND site IN `+in, inArgs...).Scan(&res.Searched); err != nil {
 		return nil, classify(err)
 	}
 	if res.Pending, err = d.pending(ctx); err != nil {
@@ -128,14 +134,16 @@ func (d *DB) SearchWith(ctx context.Context, query string, opts SearchOptions) (
 	}
 	filtered := frag != ""
 	if filtered {
-		if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM pages p WHERE p.gone_at = ''`+frag, fargs...).Scan(&res.Filtered); err != nil {
+		if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM pages p WHERE p.gone_at = '' AND p.site IN `+in+frag, append(append([]any{}, inArgs...), fargs...)...).Scan(&res.Filtered); err != nil {
 			return nil, classify(err)
 		}
 	}
+	// the sets a search reads bound what a filter lists too
+	frag, fargs = " AND p.site IN "+in+frag, append(append([]any{}, inArgs...), fargs...)
 	var hits []Hit
 	switch {
 	case strings.TrimSpace(query) != "":
-		hits, err = d.searchIndex(ctx, query, frag, fargs, limit)
+		hits, err = d.searchSets(ctx, sites, query, frag, fargs, limit)
 	case filtered:
 		hits, err = d.run(ctx, fmt.Sprintf(listSQL, frag), append(append([]any{}, fargs...), limit))
 	default:

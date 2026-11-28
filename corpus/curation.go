@@ -37,7 +37,10 @@ type Exclusion struct {
  */
 func (d *DB) Forget(ctx context.Context, site string) (int, error) {
 	n, err := d.forget(ctx, site)
-	return n, d.afterChange(ctx, n > 0, err)
+	if err == nil {
+		err = d.dropSets(ctx, []string{site})
+	}
+	return n, err
 }
 
 func (d *DB) forget(ctx context.Context, site string) (int, error) {
@@ -73,7 +76,10 @@ func (d *DB) forget(ctx context.Context, site string) (int, error) {
  */
 func (d *DB) ForgetAll(ctx context.Context) (int, error) {
 	n, err := d.forgetAll(ctx)
-	return n, d.afterChange(ctx, n > 0, err)
+	if err == nil {
+		err = d.ensureSets(ctx) // no page is left, so no set is
+	}
+	return n, err
 }
 
 func (d *DB) forgetAll(ctx context.Context) (int, error) {

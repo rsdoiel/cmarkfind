@@ -74,25 +74,20 @@ func TestIndexerBuildAndListNameTheDocumentOnlyWords(t *testing.T) {
 	if r := do(t, "-db", db, "fill", bigSite(t)); r.code != 0 {
 		t.Fatalf("fill: %+v", r)
 	}
-	dir := filepath.Join(t.TempDir(), "idx")
-	r := do(t, "-db", db, "indexer", "build", dir)
-	if r.code != 0 || !strings.Contains(r.out, "document-only") || !strings.Contains(r.out, "the") {
-		t.Errorf("build: %+v", r)
-	}
-	r = do(t, "-db", db, "indexer", "list", dir)
+	r := do(t, "-db", db, "indexer", "list")
 	if r.code != 0 || !strings.Contains(r.out, "document-only") || !strings.Contains(r.out, "the") {
 		t.Errorf("list: %+v", r)
 	}
-	// and the index search path works on it
-	r = do(t, "-db", db, "search", "-index", dir, "the zebra")
+	// and a search works on it
+	r = do(t, "-db", db, "search", "the zebra")
 	if r.code != 0 || !strings.Contains(r.out, "small.md") || !strings.Contains(r.out, "big1.md") {
 		t.Errorf("search: %+v", r)
 	}
 }
 
 func TestAnIndexWithNoDocumentOnlyWordPrintsNoSuchLine(t *testing.T) {
-	_, dir := built(t)
-	if r := do(t, "indexer", "list", dir); strings.Contains(r.out, "document-only") {
+	db, set, _ := built(t)
+	if r := do(t, "-db", db, "indexer", "list", set); strings.Contains(r.out, "document-only") {
 		t.Errorf("list: %q", r.out)
 	}
 }

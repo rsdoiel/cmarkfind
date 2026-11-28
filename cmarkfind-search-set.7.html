@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <title>cmarkfind</title>
+    <link rel="alternate" type="text/markdown" href="cmarkfind-search-set.7.md">
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<a href="#main-content" class="visually-hidden">skip to main content</a>
+<nav>
+<ul>
+    <li><a href="index.html">Home</a></li>
+    <li><a href="LICENSE">LICENSE</a></li>
+    <li><a href="INSTALL.html">INSTALL</a></li>
+    <li><a href="about.html">About</a></li>
+    <li><a href="https://github.com/rsdoiel/cmarkfind">Code Repository</a></li>
+</ul>
+</nav>
+<section id="main-content">
+<h1 id="name">NAME</h1>
+<p>cmarkfind-search-set — search one set</p>
+<h1 id="synopsis">SYNOPSIS</h1>
+<p>cmarkfind search-set <a href="#options">OPTIONS</a> SET QUERY…</p>
+<h1 id="description">DESCRIPTION</h1>
+<p>Search one index set (cmarkfind-set(7)) and print the hits as search
+does (cmarkfind-search(7)). The set is searched whether or not it is
+ignored, and nothing from any other set is shown. SET is named as for
+set show.</p>
+<h1 id="options">OPTIONS</h1>
+<dl>
+<dt>-limit N</dt>
+<dd>
+At most N hits. Default 10.
+</dd>
+<dt>-tag TAG</dt>
+<dd>
+Only pages with the tag; repeat for several.
+</dd>
+<dt>-pinned</dt>
+<dd>
+Only pinned pages.
+</dd>
+<dt>-json</dt>
+<dd>
+As search.
+</dd>
+</dl>
+<h1 id="exit-status">EXIT STATUS</h1>
+<p>1 when nothing matches, 66 when SET is not a set, 2 when it fits more
+than one. See cmarkfind-exit-status(7).</p>
+<h1 id="examples">EXAMPLES</h1>
+<pre><code>cmarkfind search-set rsdoiel.github.io &quot;OBNC AND Oberon Compiler&quot;</code></pre>
+<h1 id="see-also">SEE ALSO</h1>
+<p>cmarkfind(1), cmarkfind-search(7), cmarkfind-set(7),
+cmarkfind-query(7)</p>
+</section>
+<footer>
+<p>cmarkfind. This page is also published as <a href="cmarkfind-search-set.7.md">Markdown</a>.</p>
+</footer>
+</body>
+</html>

@@ -151,6 +151,30 @@ each is checked by lookup, not by scanning the page.</li>
 <li>An index file with extra trailing elements in a record (a later
 writer’s addition) is read, as the format promises; before, only
 postings tolerated them.</li>
+<li>Index sets: every site the corpus holds pages for (a table of
+contents on the web, or a folder) is a set with an index of its own,
+under <code>index/sets/</code> beside the corpus (or
+<code>CMARKFIND_INDEX</code>). <code>search</code> reads every set and
+merges them by reciprocal rank fusion; <code>search-set SET QUERY</code>
+reads one. <code>set list</code>, <code>set show SET</code>,
+<code>set ignore SET</code>, <code>set unignore SET</code> and
+<code>set fields SET</code> manage them: an ignored set is left out of
+<code>search</code> and still reached by <code>search-set</code>. A set
+is named by its address with or without the scheme
+(<code>rsdoiel.github.io</code>) or by its folder. <code>fill</code>
+makes a set and <code>forget</code> removes it with its index.</li>
+<li>There is no longer one index for the whole corpus: a fill or an
+exclusion rebuilds only the sets whose pages changed, and
+<code>indexer build [SET]</code>, <code>indexer validate [SET]</code>
+and <code>indexer list [SET]</code> take a set and not a folder.
+<code>search -index DIR</code> and <code>indexer build DIR</code> are
+gone (neither was released). The first build removes the old corpus-wide
+index files. A set’s folder is a complete index that can be published as
+it is.</li>
+<li>Schema version 6 (the <code>sets</code> and <code>collections</code>
+tables). An older cmarkbrowser exits 65 on a version 6 file; move it to
+this cmarkfind first. New help topics <code>set</code> and
+<code>search-set</code>.</li>
 </ul>
 <h2 id="v0.0.1-2026-11-26">v0.0.1, 2026-11-26</h2>
 <p>First release: a personal search engine for the Markdown web.</p>

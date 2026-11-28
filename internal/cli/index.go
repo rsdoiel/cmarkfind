@@ -25,26 +25,6 @@ import (
  */
 func DefaultIndexDir(dbFile string) string { return corpus.DefaultIndexDir(dbFile) }
 
-// indexDir takes the optional DIR argument of an index verb.
-func indexDir(dbFile, verb string, args []string) (string, error) {
-	switch len(args) {
-	case 0:
-		return DefaultIndexDir(dbFile), nil
-	case 1:
-		return args[0], nil
-	}
-	return "", fmt.Errorf("%w: indexer %s takes at most one DIR", ErrUsage, verb)
-}
-
-// openIndex opens an index, naming the directory when it is not there.
-func openIndex(dir string) (*index.Index, error) {
-	ix, err := index.Open(dir)
-	if err != nil {
-		return nil, err
-	}
-	return ix, nil
-}
-
 func (o *out) indexer(ctx context.Context, dbFile string, args []string) error {
 	verb := "list" // a bare indexer lists
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
@@ -54,11 +34,33 @@ func (o *out) indexer(ctx context.Context, dbFile string, args []string) error {
 	case "build":
 		return o.indexBuild(ctx, dbFile, args)
 	case "validate":
-		return o.indexValidate(dbFile, args)
+		return o.indexValidate(ctx, dbFile, args)
 	case "list":
-		return o.indexList(dbFile, args)
+		return o.indexList(ctx, dbFile, args)
 	}
 	return fmt.Errorf("%w: unknown indexer verb %q (build, validate, list)", ErrUsage, verb)
+}
+
+// indexSets resolves the optional SET argument of an indexer verb: the one set,
+// or every set.
+func indexSets(ctx context.Context, db *corpus.DB, verb string, args []string) ([]corpus.SetInfo, error) {
+	if len(args) > 1 {
+		return nil, fmt.Errorf("%w: indexer %s takes at most one SET", ErrUsage, verb)
+	}
+	sets, err := db.Sets(ctx)
+	if err != nil || len(args) == 0 {
+		return sets, err
+	}
+	site, err := db.ResolveSet(ctx, args[0])
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range sets {
+		if s.Name == site {
+			return []corpus.SetInfo{s}, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: %s", corpus.ErrNoSet, args[0])
 }
 
 func (o *out) indexBuild(ctx context.Context, dbFile string, args []string) error {
@@ -72,8 +74,36 @@ func (o *out) indexBuild(ctx context.Context, dbFile string, args []string) erro
 	if chunkSet && *chunk < 1 {
 		return fmt.Errorf("%w: -chunk must be at least 1", ErrUsage)
 	}
-	dir, err := indexDir(dbFile, "build", fset.Args())
+	db, err := openExisting(dbFile)
 	if err != nil {
+		return err
+	}
+	defer db.Close()
+	sets, err := indexSets(ctx, db, "build", fset.Args())
+	if err != nil {
+		return err
+	}
+	site := ""
+	if fset.NArg() == 1 && len(sets) == 1 {
+		site = sets[0].Name
+	}
+	b, err := db.BuildSets(ctx, site, *chunk)
+	o.indexWarnings(db)
+	if err != nil {
+		return err
+	}
+	if o.json {
+		out, _ := json.Marshal(map[string]any{"built": b.Built, "unchanged": b.Unchanged})
+		fmt.Fprintf(o.stdout, "%s\n", out)
+		return nil
+	}
+	fmt.Fprintf(o.stdout, "built %d, unchanged %d\n", b.Built, b.Unchanged)
+	return nil
+}
+
+func (o *out) indexValidate(ctx context.Context, dbFile string, args []string) error {
+	fset, j := flags("indexer validate", o)
+	if err := parse(fset, args, o, j); err != nil {
 		return err
 	}
 	db, err := openExisting(dbFile)
@@ -81,154 +111,71 @@ func (o *out) indexBuild(ctx context.Context, dbFile string, args []string) erro
 		return err
 	}
 	defer db.Close()
-	ix, err := db.BuildIndex(ctx, dir, *chunk)
-	o.indexWarnings(db)
+	sets, err := indexSets(ctx, db, "validate", fset.Args())
 	if err != nil {
 		return err
 	}
-	rep := db.LastBuildReport()
-	if o.json {
-		words := []map[string]any{}
-		long := 0
-		if rep != nil {
-			long = rep.LongTokens
-			for _, w := range rep.DocumentOnly {
-				words = append(words, map[string]any{"word": w.Word, "pages": w.Pages, "positions": w.Positions})
-			}
+	var first error
+	rows := []map[string]any{}
+	for _, s := range sets {
+		verr := index.Verify(s.IndexDir)
+		if verr != nil && first == nil {
+			first = fmt.Errorf("%s: %w", s.Name, verr)
 		}
-		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "document_only": words, "long_tokens": long})
-		fmt.Fprintf(o.stdout, "%s\n", b)
-		return nil
-	}
-	fmt.Fprintf(o.stdout, "indexed %d %s in %d %s, generation %d, into %s\n", ix.Count(), plural(ix.Count(), "page", "pages"),
-		ix.Chunks(), plural(ix.Chunks(), "chunk", "chunks"), ix.Generation(), dir)
-	if rep != nil {
-		for _, w := range rep.DocumentOnly {
-			fmt.Fprintf(o.stdout, "document-only %s  %d %s, %d positions\n", w.Word, w.Pages, plural(w.Pages, "page", "pages"), w.Positions)
+		rows = append(rows, map[string]any{"name": s.Name, "path": s.IndexDir, "ok": verr == nil})
+		if !o.json && verr == nil {
+			fmt.Fprintf(o.stdout, "%s is sound\n", s.Name)
 		}
-		if rep.LongTokens > 0 {
-			fmt.Fprintf(o.stdout, "skipped %d %s over %d bytes\n", rep.LongTokens, plural(rep.LongTokens, "word", "words"), index.MaxTermBytes)
-		}
-	}
-	return nil
-}
-
-func (o *out) indexValidate(dbFile string, args []string) error {
-	fset, j := flags("indexer validate", o)
-	if err := parse(fset, args, o, j); err != nil {
-		return err
-	}
-	dir, err := indexDir(dbFile, "validate", fset.Args())
-	if err != nil {
-		return err
-	}
-	if err := index.Verify(dir); err != nil {
-		return err
 	}
 	if o.json {
-		b, _ := json.Marshal(map[string]any{"path": dir, "ok": true})
-		fmt.Fprintf(o.stdout, "%s\n", b)
-		return nil
+		out, _ := json.Marshal(map[string]any{"indexes": rows})
+		fmt.Fprintf(o.stdout, "%s\n", out)
 	}
-	fmt.Fprintf(o.stdout, "%s is sound\n", dir)
-	return nil
+	return first
 }
 
-func (o *out) indexList(dbFile string, args []string) error {
+func (o *out) indexList(ctx context.Context, dbFile string, args []string) error {
 	fset, j := flags("indexer list", o)
 	if err := parse(fset, args, o, j); err != nil {
 		return err
 	}
-	dir, err := indexDir(dbFile, "list", fset.Args())
+	db, err := openExisting(dbFile)
 	if err != nil {
 		return err
 	}
-	ix, err := openIndex(dir)
+	defer db.Close()
+	sets, err := indexSets(ctx, db, "list", fset.Args())
 	if err != nil {
 		return err
 	}
-	if o.json {
+	rows := []map[string]any{}
+	for _, s := range sets {
+		ix, ierr := index.Open(s.IndexDir)
+		if ierr != nil && !index.IsMissing(ierr) {
+			return fmt.Errorf("%s: %w", s.Name, ierr)
+		}
+		if ierr != nil {
+			rows = append(rows, map[string]any{"name": s.Name, "path": s.IndexDir, "built": false})
+			if !o.json {
+				fmt.Fprintf(o.stdout, "%s\nnot built\n", s.Name)
+			}
+			continue
+		}
 		docOnly := ix.DocumentOnly()
 		if docOnly == nil {
 			docOnly = []string{}
 		}
-		b, _ := json.Marshal(map[string]any{"path": dir, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "built": ix.Built(), "document_only": docOnly})
-		fmt.Fprintf(o.stdout, "%s\n", b)
-		return nil
-	}
-	fmt.Fprintf(o.stdout, "path %s\npages %d\nchunks %d\ngeneration %d\nbuilt %s\n", dir, ix.Count(), ix.Chunks(), ix.Generation(), ix.Built())
-	if w := ix.DocumentOnly(); len(w) > 0 {
-		fmt.Fprintf(o.stdout, "document-only %d  %s\n", len(w), strings.Join(w, " "))
-	}
-	return nil
-}
-
-// searchIndex answers a search from an index directory.
-func (o *out) searchIndex(dir string, query string, limit int) error {
-	if strings.TrimSpace(query) == "" {
-		return fmt.Errorf("%w: search needs a query", ErrUsage)
-	}
-	node, err := index.ParseQuery(query, nil)
-	if err != nil {
-		return err
-	}
-	ix, err := openIndex(dir)
-	if err != nil {
-		return err
-	}
-	var hits []index.Hit
-	if node != nil {
-		if hits, err = ix.Search(node, limit); err != nil {
-			return err
+		rows = append(rows, map[string]any{"name": s.Name, "path": s.IndexDir, "built": true, "pages": ix.Count(), "chunks": ix.Chunks(), "generation": ix.Generation(), "built_at": ix.Built(), "document_only": docOnly})
+		if !o.json {
+			fmt.Fprintf(o.stdout, "%s\npath %s\npages %d\nchunks %d\ngeneration %d\nbuilt %s\n", s.Name, s.IndexDir, ix.Count(), ix.Chunks(), ix.Generation(), ix.Built())
+			if len(docOnly) > 0 {
+				fmt.Fprintf(o.stdout, "document-only %d  %s\n", len(docOnly), strings.Join(docOnly, " "))
+			}
 		}
-	}
-	type row struct {
-		address, title string
-		score          float64
-		ex             index.Excerpt
-	}
-	rows := make([]row, 0, len(hits))
-	for _, h := range hits {
-		f, err := ix.Fragment(h.Doc)
-		if err != nil {
-			return err
-		}
-		ex, err := ix.Excerpt(node, h.Doc, 0)
-		if err != nil {
-			return err
-		}
-		rows = append(rows, row{h.Address, f.Title, h.Score, ex})
 	}
 	if o.json {
-		hs := make([]map[string]any, 0, len(rows))
-		for _, r := range rows {
-			h := map[string]any{"address": r.address, "title": r.title, "score": r.score, "excerpt": r.ex.HTML}
-			if r.ex.Anchor != "" {
-				h["anchor"] = r.ex.Anchor
-			}
-			hs = append(hs, h)
-		}
-		b, _ := json.Marshal(map[string]any{"hits": hs, "searched": ix.Count()})
-		fmt.Fprintf(o.stdout, "%s\n", b)
-	} else {
-		for _, r := range rows {
-			text := ""
-			if r.ex.Text != "" {
-				lead, trail := "", ""
-				if r.ex.Leading {
-					lead = "… "
-				}
-				if r.ex.Trailing {
-					trail = " …"
-				}
-				text = mdSnippet(lead + r.ex.Text + trail)
-			}
-			o.writeHit(r.title, r.address, r.ex.Anchor, "", text)
-		}
-		fmt.Fprintf(o.stderr, "%s: %d %s, searched %d pages\n", appName, len(rows), plural(len(rows), "hit", "hits"), ix.Count())
-	}
-	if len(rows) == 0 {
-		return ErrNoMatch
+		out, _ := json.Marshal(map[string]any{"indexes": rows})
+		fmt.Fprintf(o.stdout, "%s\n", out)
 	}
 	return nil
 }

@@ -2,9 +2,8 @@ package corpus
 
 import (
 	"context"
+	"sort"
 	"strings"
-
-	"github.com/rsdoiel/cmarkfind/index"
 )
 
 /** SiteStat counts the pages that came from one site by one tier.
@@ -74,16 +73,40 @@ type Stats struct {
  */
 func (d *DB) Stats(ctx context.Context) (*Stats, error) {
 	st := &Stats{SchemaVersion: SchemaVersion}
-	if ix, err := index.Open(d.IndexDir()); err == nil {
-		st.DocumentOnly = ix.DocumentOnly()
+	if err := d.ensureSets(ctx); err != nil {
+		return nil, err
 	}
-	var skipped string
-	if err := d.sql.QueryRowContext(ctx, `SELECT coalesce((SELECT value FROM meta WHERE key = ?), '')`, metaNotIndexed).Scan(&skipped); err != nil {
+	srows, err := d.sql.QueryContext(ctx, `SELECT document_only, not_indexed FROM sets`)
+	if err != nil {
 		return nil, classify(err)
 	}
-	if skipped != "" {
-		st.NotIndexed = strings.Split(skipped, "\n")
+	only, skipped := map[string]bool{}, map[string]bool{}
+	for srows.Next() {
+		var o, n string
+		if err := srows.Scan(&o, &n); err != nil {
+			srows.Close()
+			return nil, classify(err)
+		}
+		for _, w := range strings.Split(o, "\n") {
+			if w != "" {
+				only[w] = true
+			}
+		}
+		for _, a := range strings.Split(n, "\n") {
+			if a != "" {
+				skipped[a] = true
+			}
+		}
 	}
+	srows.Close()
+	for w := range only {
+		st.DocumentOnly = append(st.DocumentOnly, w)
+	}
+	sort.Strings(st.DocumentOnly)
+	for a := range skipped {
+		st.NotIndexed = append(st.NotIndexed, a)
+	}
+	sort.Strings(st.NotIndexed)
 	if err := d.sql.QueryRowContext(ctx, `SELECT count(*) FROM excluded`).Scan(&st.Excluded); err != nil {
 		return nil, classify(err)
 	}

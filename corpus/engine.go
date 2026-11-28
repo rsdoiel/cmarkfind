@@ -3,7 +3,6 @@ package corpus
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/rsdoiel/cmarkfind/index"
@@ -27,11 +25,8 @@ var ErrIndex = errors.New("corpus: cannot write the index")
 var ErrIndexShared = errors.New("corpus: the index folder belongs to another corpus")
 
 const (
-	metaIndexGeneration = "index_generation"
-	metaDocumentOnly    = "document_only_digest"
-	metaNotIndexed      = "index_not_indexed"
-	metaCorpusID        = "corpus_id"
-	ownerFile           = ".cmarkfind-owner"
+	metaCorpusID = "corpus_id"
+	ownerFile    = ".cmarkfind-owner"
 )
 
 // corpusID is this corpus file's identity, made on first use and kept in meta
@@ -60,6 +55,13 @@ func (d *DB) corpusID(ctx context.Context) (string, error) {
 // owner file is taken (an index from before folders had owners, or an empty
 // one); one another corpus owns is refused.
 func (d *DB) claim(ctx context.Context) error {
+	if err := d.claimDir(ctx); err != nil {
+		return err
+	}
+	return d.retireTopLevel()
+}
+
+func (d *DB) claimDir(ctx context.Context) error {
 	id, err := d.corpusID(ctx)
 	if err != nil {
 		return err
@@ -124,131 +126,6 @@ func DefaultIndexDir(dbFile string) string {
  */
 func (d *DB) IndexDir() string { return DefaultIndexDir(d.path) }
 
-/** BuildIndex writes the index of the stored pages into dir: every page not
- * gone and not under an excluded prefix. The generation goes up by one from
- * the index already there, and files the old manifest named are pruned. When
- * dir is the corpus's own IndexDir the folder is claimed for this corpus (an
- * owner file; ErrIndexShared when another corpus owns it) and the generation is
- * recorded, so a later search can tell this index is the one built from this
- * corpus.
- *
- * Parameters:
- *   ctx (context.Context) — cancels the read of the pages
- *   dir (string)          — the index directory
- *   chunk (int)           — entries per word chunk; 0 means the default
- *
- * Returns:
- *   *index.Index — the opened result
- *   error        — database errors; index.ErrData for a bad page set;
- *                  ErrIndex when the files cannot be written; ErrIndexShared
- *                  when another corpus owns the folder
- *
- * Example:
- *   ix, err := db.BuildIndex(ctx, db.IndexDir(), 0)
- */
-func (d *DB) BuildIndex(ctx context.Context, dir string, chunk int) (*index.Index, error) {
-	own := filepath.Clean(dir) == filepath.Clean(d.IndexDir())
-	if own {
-		if err := d.claim(ctx); err != nil {
-			return nil, err
-		}
-	}
-	pages, err := d.IndexPages(ctx)
-	if err != nil {
-		return nil, err
-	}
-	docs := make([]index.Doc, len(pages))
-	for i, p := range pages {
-		docs[i] = index.Doc{Address: p.Address, Title: p.Title, Description: p.Description, Body: p.Body}
-	}
-	gen := uint64(1)
-	if old, err := index.Open(dir); err == nil {
-		gen = old.Generation() + 1
-	}
-	rep, err := index.BuildWithReport(dir, docs, index.BuildOptions{ChunkEntries: chunk, Generation: gen})
-	if err != nil {
-		if index.IsDataError(err) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("%w: %w", ErrIndex, err)
-	}
-	if _, err := index.Prune(dir); err != nil {
-		return nil, err
-	}
-	ix, err := index.Open(dir)
-	if err != nil {
-		return nil, err
-	}
-	d.mu.Lock()
-	d.report = rep
-	d.mu.Unlock()
-	if own {
-		_, err = d.sql.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-			metaIndexGeneration, strconv.FormatUint(ix.Generation(), 10))
-		if err != nil {
-			return nil, classify(err)
-		}
-		if err := d.noteDocumentOnly(ctx, rep, ix.DocumentOnly()); err != nil {
-			return nil, err
-		}
-		if err := d.noteNotIndexed(ctx, rep); err != nil {
-			return nil, err
-		}
-	}
-	return ix, nil
-}
-
-// noteDocumentOnly records which words the corpus's own index holds without
-// positions and, when that set is not the one the last build recorded and is
-// not empty, queues a warning for IndexWarnings. A build that changes nothing
-// about the set says nothing.
-func (d *DB) noteDocumentOnly(ctx context.Context, rep *index.BuildReport, words []string) error {
-	sum := sha256.Sum256([]byte(strings.Join(words, "\n")))
-	digest := ""
-	if len(words) > 0 {
-		digest = hex.EncodeToString(sum[:])
-	}
-	var old string
-	err := d.sql.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaDocumentOnly).Scan(&old)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return classify(err)
-	}
-	if _, err := d.sql.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, metaDocumentOnly, digest); err != nil {
-		return classify(err)
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if len(words) > 0 && digest != old {
-		shown := words
-		more := ""
-		if len(shown) > 8 {
-			shown, more = shown[:8], fmt.Sprintf(" and %d more", len(words)-8)
-		}
-		d.warnings = append(d.warnings, fmt.Sprintf("%d %s now indexed without positions: %s%s (a phrase through %s is checked against each page's text)",
-			len(words), pluralWords(len(words)), strings.Join(shown, ", "), more, pronoun(len(words), "it", "them")))
-	}
-	if rep != nil {
-		for _, w := range rep.Warnings {
-			d.warnings = append(d.warnings, w)
-		}
-	}
-	return nil
-}
-
-// noteNotIndexed records which pages the last build of the corpus's own index
-// left out (a page whose text is over one index file's limit), for Stats. An
-// empty list is stored as an empty value so a rebuild that fixes it clears it.
-func (d *DB) noteNotIndexed(ctx context.Context, rep *index.BuildReport) error {
-	var addrs []string
-	for _, s := range rep.Skipped {
-		addrs = append(addrs, s.Address)
-	}
-	sort.Strings(addrs)
-	_, err := d.sql.ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-		metaNotIndexed, strings.Join(addrs, "\n"))
-	return classify(err)
-}
-
 func pluralWords(n int) string {
 	if n == 1 {
 		return "word is"
@@ -310,32 +187,14 @@ func (d *DB) afterFill(ctx context.Context, rep *FillReport, err error) (*FillRe
 	return rep, err
 }
 
-// afterChange rebuilds the index when changed is true; err passes through.
+// afterChange builds the sets whose pages changed (a set whose inputs are as
+// they were builds nothing) when changed is true; err passes through.
 func (d *DB) afterChange(ctx context.Context, changed bool, err error) error {
 	if err != nil || !changed {
 		return err
 	}
-	_, err = d.BuildIndex(ctx, d.IndexDir(), 0)
+	_, err = d.BuildSets(ctx, "", 0)
 	return err
-}
-
-// current opens the index of this corpus, building it first when it is
-// missing or is not the one this corpus last built (another build or another
-// corpus wrote the directory).
-func (d *DB) current(ctx context.Context) (*index.Index, error) {
-	if err := d.claim(ctx); err != nil {
-		return nil, err
-	}
-	dir := d.IndexDir()
-	var rec string
-	err := d.sql.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, metaIndexGeneration).Scan(&rec)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, classify(err)
-	}
-	if ix, oerr := index.Open(dir); oerr == nil && strconv.FormatUint(ix.Generation(), 10) == rec {
-		return ix, nil
-	}
-	return d.BuildIndex(ctx, dir, 0)
 }
 
 // tierRank orders pages of equal score: a page the person chose first.
@@ -406,10 +265,16 @@ func (d *DB) passing(ctx context.Context, frag string, args []any) (map[string]b
 	return out, classify(rows.Err())
 }
 
-// searchIndex answers a query from the index: every match, filtered by the
-// pinned and tag sets, then pinned first, then score (to two decimals), then
-// tier, then address, cut at limit, with a bracketed snippet each.
-func (d *DB) searchIndex(ctx context.Context, query, frag string, fargs []any, limit int) ([]Hit, error) {
+// rrfK is the constant of reciprocal rank fusion: a hit's share of the score is
+// 1 / (rrfK + its rank in one set), ranks counted from 1.
+const rrfK = 60
+
+// searchSets answers a query from the index of each set in sites: every set is
+// searched alone and its hits ranked by score (to two decimals), then tier, then
+// address; the lists are merged by reciprocal rank fusion, then pinned hits come
+// first, then the fused score, tier and address; cut at limit, with a bracketed
+// snippet each. The pinned and tag sets filter before ranking.
+func (d *DB) searchSets(ctx context.Context, sites []string, query, frag string, fargs []any, limit int) ([]Hit, error) {
 	node, err := index.ParseQuery(query, nil)
 	if err != nil {
 		return nil, err
@@ -417,68 +282,93 @@ func (d *DB) searchIndex(ctx context.Context, query, frag string, fargs []any, l
 	if node == nil {
 		return nil, nil
 	}
-	ix, err := d.current(ctx)
-	if err != nil {
-		return nil, err
-	}
-	all, err := ix.Search(node, 0)
-	if err != nil {
-		return nil, err
-	}
+	var ok map[string]bool
 	if frag != "" {
-		ok, err := d.passing(ctx, frag, fargs)
+		if ok, err = d.passing(ctx, frag, fargs); err != nil {
+			return nil, err
+		}
+	}
+	type cand struct {
+		h     index.Hit
+		ix    *index.Index
+		fused float64
+	}
+	var all []*cand
+	meta := map[string]pageMeta{}
+	for _, site := range sites {
+		ix, err := d.currentSet(ctx, site)
 		if err != nil {
 			return nil, err
 		}
-		kept := all[:0]
-		for _, h := range all {
-			if ok[h.Address] {
-				kept = append(kept, h)
+		found, err := ix.Search(node, 0)
+		if err != nil {
+			return nil, err
+		}
+		if ok != nil {
+			kept := found[:0]
+			for _, h := range found {
+				if ok[h.Address] {
+					kept = append(kept, h)
+				}
+			}
+			found = kept
+		}
+		addrs := make([]string, len(found))
+		for i, h := range found {
+			addrs[i] = h.Address
+		}
+		m, err := d.metaOf(ctx, addrs)
+		if err != nil {
+			return nil, err
+		}
+		var mine []*cand
+		for _, h := range found {
+			if pm, live := m[h.Address]; live { // a page marked gone since the build
+				meta[h.Address] = pm
+				mine = append(mine, &cand{h: h, ix: ix})
 			}
 		}
-		all = kept
-	}
-	addrs := make([]string, len(all))
-	for i, h := range all {
-		addrs[i] = h.Address
-	}
-	meta, err := d.metaOf(ctx, addrs)
-	if err != nil {
-		return nil, err
-	}
-	live := all[:0]
-	for _, h := range all {
-		if _, ok := meta[h.Address]; ok { // a page marked gone since the build
-			live = append(live, h)
+		score := func(h index.Hit) float64 { return float64(int64(h.Score*100+0.5)) / 100 }
+		sort.SliceStable(mine, func(i, j int) bool {
+			a, b := mine[i].h, mine[j].h
+			if score(a) != score(b) {
+				return score(a) > score(b)
+			}
+			if ra, rb := rankOf(meta[a.Address].tier), rankOf(meta[b.Address].tier); ra != rb {
+				return ra < rb
+			}
+			return a.Address < b.Address
+		})
+		for i, c := range mine {
+			c.fused = 1 / float64(rrfK+i+1)
 		}
+		all = append(all, mine...)
 	}
-	all = live
-	score := func(h index.Hit) float64 { return float64(int64(h.Score*100+0.5)) / 100 }
 	sort.SliceStable(all, func(i, j int) bool {
 		a, b := all[i], all[j]
-		ma, mb := meta[a.Address], meta[b.Address]
+		ma, mb := meta[a.h.Address], meta[b.h.Address]
 		if ma.pinned != mb.pinned {
 			return ma.pinned
 		}
-		if score(a) != score(b) {
-			return score(a) > score(b)
+		if a.fused != b.fused {
+			return a.fused > b.fused
 		}
 		if ra, rb := rankOf(ma.tier), rankOf(mb.tier); ra != rb {
 			return ra < rb
 		}
-		return a.Address < b.Address
+		return a.h.Address < b.h.Address
 	})
 	if len(all) > limit {
 		all = all[:limit]
 	}
 	hits := make([]Hit, 0, len(all))
-	for _, h := range all {
-		m := meta[h.Address]
-		snip, anchor, err := snippet(ix, node, h.Doc)
+	for _, c := range all {
+		m := meta[c.h.Address]
+		snip, anchor, err := snippet(c.ix, node, c.h.Doc)
 		if err != nil {
 			return nil, err
 		}
-		hits = append(hits, Hit{Address: h.Address, Title: m.title, Site: m.site, Tier: m.tier, Snippet: snip, Anchor: anchor, Pinned: m.pinned})
+		hits = append(hits, Hit{Address: c.h.Address, Title: m.title, Site: m.site, Tier: m.tier, Snippet: snip, Anchor: anchor, Pinned: m.pinned})
 	}
 	return hits, nil
 }

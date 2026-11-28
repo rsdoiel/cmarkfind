@@ -32,8 +32,11 @@ cmarkfind fill ~/Sites/example.org
 cmarkfind search oberon compiler
 cmarkfind stats</code></pre>
 <p>A big site can be read a few pages at a time with
-<code>fill -batch 25 -every 1h -until-done</code>. <code>exclude</code>
-keeps an address prefix out of the corpus; <code>forget</code> deletes a
+<code>fill -batch 25 -every 1h -until-done</code>. Each site is an index
+set with an index of its own: <code>search</code> reads every set,
+<code>search-set NAME</code> reads one, and <code>set ignore NAME</code>
+leaves a near-duplicate copy out of a lookup. <code>exclude</code> keeps
+an address prefix out of the corpus; <code>forget</code> deletes a
 site’s pages. <code>pin</code> puts a page first among the matches and
 <code>tag</code> gives it your own words; <code>search -pinned</code>
 and <code>search -tag</code> find them again.

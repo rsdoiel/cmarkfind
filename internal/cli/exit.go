@@ -75,7 +75,7 @@ func Classify(err error) (int, string) {
 	switch {
 	case err == nil:
 		return ExitOK, "ok"
-	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag), index.IsQueryLimit(err):
+	case errors.Is(err, ErrUsage), errors.Is(err, corpus.ErrBadPrefix), errors.Is(err, corpus.ErrBadAddress), errors.Is(err, corpus.ErrBadTag), errors.Is(err, corpus.ErrAmbiguousSet), index.IsQueryLimit(err):
 		return ExitUsage, "usage"
 	case errors.Is(err, corpus.ErrIndexShared):
 		return ExitConfig, "config"
@@ -89,7 +89,7 @@ func Classify(err error) (int, string) {
 		return ExitTempFail, "temp_fail"
 	case errors.Is(err, corpus.ErrSchema), errors.Is(err, fetch.ErrData), errors.Is(err, page.ErrData), errors.Is(err, fetch.ErrTooLarge), index.IsDataError(err):
 		return ExitData, "data"
-	case errors.Is(err, fs.ErrNotExist), errors.Is(err, toc.ErrNoOutline), errors.Is(err, page.ErrNoInput), index.IsMissing(err):
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, toc.ErrNoOutline), errors.Is(err, page.ErrNoInput), errors.Is(err, corpus.ErrNoSet), index.IsMissing(err):
 		return ExitNoInput, "no_input"
 	case errors.Is(err, ErrNoMatch), errors.Is(err, ErrNothing), errors.Is(err, fetch.ErrForbidden):
 		return ExitNegative, "negative"

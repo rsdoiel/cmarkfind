@@ -118,33 +118,28 @@ it is pinned and its tags, then the matching text with the matched words in
 has the same facts for programs. The count and how many pages were searched go to standard error.
 QUERY is words, "phrases", AND, OR, NOT, -word, word* and title:word; see
 cmarkfind-query(7). Text that is not valid query syntax is searched as plain
-words. The search reads the index that the last fill built beside the corpus
-(cmarkfind-indexer(7)); when it is missing or is not the corpus's own, search
-builds it first, which takes a few seconds on a large corpus.
+words. The search reads the index of every set that is not ignored
+(cmarkfind-set(7)), each set alone, and merges the answers by reciprocal rank
+fusion, so a small site's best page is not buried by a large site's several
+matches. A set's index is built after the fill that changed it
+(cmarkfind-indexer(7)); one that is missing is built first, which takes a few
+seconds on a large set. To search one set only, see cmarkfind-search-set(7).
 
 # OPTIONS
 
 -limit N
 : At most N hits. Default 10.
 
--index DIR
-: Search the index in DIR (see cmarkfind-indexer(7)) instead of the corpus's
-  own index; the pins, tags and tiers of the corpus do not apply, so -tag and
-  -pinned do not either. Exit 66 when DIR holds no index, 65 when it is damaged,
-  2 when the query is too large.
-
 -json
 : Write {"hits": [...], "searched": N}; each hit has "anchor", the heading slug
-  (empty when there is none). With -index each hit also has "excerpt"
-  (the best 30 words, HTML-escaped, each matched word in <mark>) and, when the
-  excerpt sits under a heading, "anchor" (the heading's slug, for address#anchor).
+  (empty when there is none).
 
 Use -- before a query that starts with a dash.
 
 # EXIT STATUS
 
-1 when nothing matches, 66 when there is no corpus yet. See
-cmarkfind-exit-status(7).
+1 when nothing matches, or every set is ignored; 66 when there is no corpus yet.
+See cmarkfind-exit-status(7).
 
 # EXAMPLES
 
@@ -157,27 +152,30 @@ cmarkfind(1), cmarkfind-query(7), cmarkfind-corpus(7)
 `},
 	{"indexer", "build, check and list a search index", `# SYNOPSIS
 
-cmarkfind indexer build [-chunk N] [DIR]
+cmarkfind indexer build [-chunk N] [SET]
 
-cmarkfind indexer validate [DIR]
+cmarkfind indexer validate [SET]
 
-cmarkfind indexer [list] [DIR]
-
-cmarkfind search -index DIR QUERY...
+cmarkfind indexer [list] [SET]
 
 # DESCRIPTION
 
-An index is a folder of compressed files, made from the corpus, that a program
-can search without the corpus (and, later, over HTTP). build writes one from
-every page the corpus holds that is not gone and not under an excluded prefix.
-Building again replaces it: the generation number grows by one and files the
-new manifest no longer names are removed once they are ten minutes old, so
-a search that began before the rebuild can finish. The same pages always give the same
-files.
+An index is a folder of compressed files, made from the pages of one set
+(cmarkfind-set(7)), that a program can search without the corpus (and, later,
+over HTTP). Each set has an index folder of its own and there is no index of
+the whole corpus. build writes the index of every set that needs one, or of
+SET: a set needs one when it has none, when the one there is not the one this
+corpus last built, or when what it is made from has changed (its pages after
+exclusions, its field mapping). A set that needs nothing is left alone, and
+build says how many it built and how many it left. Building again replaces an
+index: the generation number grows by one and files the new manifest no longer
+names are removed once they are ten minutes old, so a search that began before
+the rebuild can finish. The same pages always give the same files, so a set's
+folder is a complete index that can be published as it is.
 
-validate reads every file and checks it against the digest in manifest.json.
-list says what an index holds: pages, chunks, generation and when it was built,
-and the words it holds without positions.
+validate reads every file of an index and checks it against the digest in
+manifest.json. list says what an index holds: pages, chunks, generation and
+when it was built, and the words it holds without positions.
 
 A word on a great many pages (a very common word such as "the", in any
 language) can make its entry too big for one index file. Over about 2 MiB an
@@ -205,18 +203,18 @@ Japanese characters in a page) cannot be written. The build leaves that page out
 warns on standard error with its address, and goes on; the page stays in the
 corpus and is not searchable. stats lists such pages as "not indexed".
 
-DIR is optional. Without it the CMARKFIND_INDEX variable is used, else a folder
-named index beside the corpus file (so -db moves both). The corpus builds its own index in that folder after every fill, forget or
-exclude that changed pages, and plain search reads it; a search finding it
-missing, or built by something else, builds it first. indexer build rebuilds it
-by hand, and search -index DIR searches any other index.
+The indexes are kept in the folder named by the CMARKFIND_INDEX variable, else
+a folder named index beside the corpus file (so -db moves both), one folder
+under it for each set. A fill, forget or exclude that changed pages builds the
+indexes of the sets it touched, and plain search reads them; a search that finds
+one missing, or built by something else, builds it first. forget removes the
+set's index with its pages. An older cmarkfind kept one index for the whole
+corpus at the top of that folder; the first build removes it.
 
 The folder is the corpus's own: the first corpus to build into it writes a small
 file, .cmarkfind-owner, naming itself, and a second corpus pointed at the same
 folder is refused (exit 78) instead of rebuilding over the first on every
-search. An index with no owner file (built by an older cmarkfind) goes to the
-first corpus that builds it. indexer build DIR into any other folder does not
-claim it.
+search. A folder with no owner file goes to the first corpus that builds in it.
 
 # OPTIONS
 
@@ -228,18 +226,122 @@ claim it.
 
 # EXIT STATUS
 
-66 when DIR holds no index (or, for build, there is no corpus), 65 when an index
-is damaged, 73 when DIR cannot be created. See cmarkfind-exit-status(7).
+66 when SET is not a set or has no index (or there is no corpus), 2 when SET
+fits more than one set, 65 when an index is damaged, 73 when an index cannot be
+written. validate checks every set and exits with the first failure's class.
+See cmarkfind-exit-status(7).
 
 # EXAMPLES
 
     cmarkfind indexer build
+    cmarkfind indexer build rsdoiel.github.io
     cmarkfind indexer validate
-    cmarkfind search -index ~/.local/share/cmarkfind/index 'title:otter OR "shallow water"'
 
 # SEE ALSO
 
-cmarkfind(1), cmarkfind-search(7), cmarkfind-query(7), cmarkfind-corpus(7)
+cmarkfind(1), cmarkfind-set(7), cmarkfind-search(7), cmarkfind-query(7), cmarkfind-corpus(7)
+`},
+	{"set", "list and manage index sets", `# SYNOPSIS
+
+cmarkfind set list
+
+cmarkfind set show SET
+
+cmarkfind set ignore SET
+
+cmarkfind set unignore SET
+
+cmarkfind set fields [-reset] SET
+
+# DESCRIPTION
+
+An index set is one instance of a site: a table of contents on the web, or a
+folder on this machine. The same site can be several sets (a copy you are
+editing, the one on the local network, the public mirror), each searched on its
+own. fill makes a set for each site it reads, and forget removes it with its
+index. Each set has an index of its own (cmarkfind-indexer(7)).
+
+search reads every set that is not ignored and merges them
+(cmarkfind-search(7)); search-set reads one (cmarkfind-search-set(7)).
+
+SET is the site as stats shows it, or its address with or without the scheme,
+the trailing slash and /.well-known/toc.opml, so rsdoiel.github.io names
+http://rsdoiel.github.io/.well-known/toc.opml; a folder is named by its path.
+A name that fits more than one set (the http and https of one host) is
+refused and the candidates are listed.
+
+list names every set with its source, its pages and whether it is ignored.
+show says what one holds, where its index is and its field mapping. ignore
+leaves a set out of search, so a near copy of a site you are not interested in
+does not fill a lookup with duplicates; search-set still reaches it. unignore
+puts it back. Nothing is ignored until you say so.
+
+fields shows how a set reads the front matter of its pages, "default" when it has
+no mapping of its own; -reset returns it to the default. A set's mapping
+changing makes its index out of date, and the next build replaces it.
+
+Pins, tags and exclusions belong to the corpus and apply in every set.
+
+# OPTIONS
+
+-reset
+: With fields, return the set's field mapping to the default.
+
+-json
+: Write the result as JSON (list: {"sets": [...]}).
+
+# EXIT STATUS
+
+66 when SET is not a set, 2 when it fits more than one or an argument is missing.
+list of a corpus with no sets is 0 and prints nothing. See
+cmarkfind-exit-status(7).
+
+# EXAMPLES
+
+    cmarkfind set list
+    cmarkfind set ignore tortuga.local
+    cmarkfind set show rsdoiel.github.io
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-search(7), cmarkfind-search-set(7), cmarkfind-indexer(7)
+`},
+	{"search-set", "search one set", `# SYNOPSIS
+
+cmarkfind search-set [OPTIONS] SET QUERY...
+
+# DESCRIPTION
+
+Search one index set (cmarkfind-set(7)) and print the hits as search does
+(cmarkfind-search(7)). The set is searched whether or not it is ignored, and
+nothing from any other set is shown. SET is named as for set show.
+
+# OPTIONS
+
+-limit N
+: At most N hits. Default 10.
+
+-tag TAG
+: Only pages with the tag; repeat for several.
+
+-pinned
+: Only pinned pages.
+
+-json
+: As search.
+
+# EXIT STATUS
+
+1 when nothing matches, 66 when SET is not a set, 2 when it fits more than one.
+See cmarkfind-exit-status(7).
+
+# EXAMPLES
+
+    cmarkfind search-set rsdoiel.github.io "OBNC AND Oberon Compiler"
+
+# SEE ALSO
+
+cmarkfind(1), cmarkfind-search(7), cmarkfind-set(7), cmarkfind-query(7)
 `},
 	{"stats", "say what the corpus holds", `# SYNOPSIS
 
@@ -278,8 +380,9 @@ cmarkfind forget -all
 # DESCRIPTION
 
 Delete the pages stored from one site (a folder or an address, named as for
-cmarkfind-fill(7)), or every page. Exclusions are kept, so a later fill does
-not bring back what exclude keeps out.
+cmarkfind-fill(7)), or every page. The site's set (cmarkfind-set(7)) and its
+index go with its pages. Exclusions are kept, so a later fill does not bring back
+what exclude keeps out.
 
 # OPTIONS
 
@@ -511,7 +614,7 @@ cmarkfind completion bash|powershell -install | -uninstall | -check
 
 Write a completion script for a shell. It completes the verbs, indexer's
 subverbs, each verb's options, the help topics, and file names where a file is
-wanted (-db, -index and the arguments of fill and indexer). The lists come from
+wanted (-db and the arguments of fill). The lists come from
 the verbs themselves (see cmarkfind-verbs(7)), so a new verb or option is
 completed with no change to the script generator.
 
@@ -639,8 +742,8 @@ The corpus is one SQLite3 file. It holds, for each page, its address, site,
 title, description, date, body, a hash of its content, the ETag and
 Last-Modified the site sent, when it was fetched and last checked, its tier, and
 when it was found gone. A search index over title, description and body does the
-searching; it is built from the pages after each fill and kept in a folder
-beside the file (cmarkfind-indexer(7)). Nothing leaves the machine when you search.
+searching; one index is built for each site (cmarkfind-set(7)) after the fill
+that changed it and kept in a folder beside the file (cmarkfind-indexer(7)). Nothing leaves the machine when you search.
 
 The file is named, in this order, by -db FILE, by the CMARKFIND_DB variable, or
 it is cmarkfind/corpus.db in your user data directory. fill creates it; search
@@ -674,13 +777,14 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 : Success.
 
 1
-: The answer is no: search found nothing (also over an index); forget's SITE or unexclude's PREFIX
+: The answer is no: search or search-set found nothing, or every set is ignored; forget's SITE or unexclude's PREFIX
   had nothing to act on; robots.txt forbids the table of contents; completion
   -uninstall found nothing, or -check found a problem.
 
 2
 : Bad command line: unknown verb, option or topic, missing argument, bad value;
-  a query is too large (over 1,024 bytes, 64 clauses or 8 levels of parentheses).
+  a query is too large (over 1,024 bytes, 64 clauses or 8 levels of parentheses);
+  a set name that fits more than one set (the http and https of one host).
 
 65
 : The file is not a corpus or has a newer schema; a source is malformed; an
@@ -688,7 +792,7 @@ is also written to standard output as {"error": "...", "class": "...", "code": N
 
 66
 : A folder, the corpus (for search and stats) or a table of contents is missing;
-  an index is missing (no manifest.json in its folder).
+  a set is not known; an index is missing (no manifest.json in its folder).
 
 69
 : The site cannot be reached.

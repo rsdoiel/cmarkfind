@@ -21,7 +21,7 @@ cmarkfind completion bash|powershell -install | -uninstall | -check
 
 Write a completion script for a shell. It completes the verbs, indexer's
 subverbs, each verb's options, the help topics, and file names where a file is
-wanted (-db, -index and the arguments of fill and indexer). The lists come from
+wanted (-db and the arguments of fill). The lists come from
 the verbs themselves (see cmarkfind-verbs(7)), so a new verb or option is
 completed with no change to the script generator.
 
