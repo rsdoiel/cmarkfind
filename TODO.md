@@ -7,6 +7,7 @@
 - [ ] cmarkfind should be able to leverage knowledges bases configured in cmarkfind
 - [ ] cmarkfind should use the verb, subverb DSL style we've established wth knowledge build's TUI providing both the scriptable actions but also a TUI to use it directly in a terminal.
 - [ ] If I am exploring something using cmarkfind, I should be able to add it to a designated knowledge base.
+- [ ] The server should give HTML results the HTML links. When a client asks for `text/html` (the `.html` suffix, or an `Accept` that chooses HTML), each hit should link to the equivalent `.html` page and not the `.md` address, so one cmarkfind service answers the Markdown Web and the HTML Web for the sites built with antennaApp (it writes both `x.md` and `x.html`). Markdown and JSON keep the stored address. Needs a short record first (the rule: BonBon's `.md`/`.html` and `index`/folder pairing, markdownweb's `toc.Mirror.Translate` is the opposite direction; a fixed rule or a setting; what `index.md` becomes; keep `#fragment`; leave `collection://` and non-`.md` addresses; whether JSON offers both; a missing twin is a broken link). See the Phase 8 hand-off.
 
 - [x] The partitioned static index is the search engine (Phase 4 done 2026-11-27). Still to explore: a site publishing its own index for cmarkfind and cmarkbrowser to read (Phase 5 index sets).
 
