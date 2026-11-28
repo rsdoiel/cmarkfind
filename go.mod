@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/glebarez/go-sqlite v1.23.0
-	github.com/rsdoiel/markdownweb v0.0.6
+	github.com/rsdoiel/markdownweb v0.0.7-0.20261128061133-4506a10621dc
 	github.com/yuin/goldmark v1.8.7
 	golang.org/x/text v0.44.0
 )
